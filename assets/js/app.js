@@ -3,13 +3,16 @@
 
 import { chunk, clamp, esc, fmtDateTime, fmtDuration, pct } from './util.js';
 import {
-  DEFAULT_SETTINGS, LIMITS, MODES, MODE_LABELS, MODE_UNITS,
-  addSession, clearHistory, importHistory, loadHistory, loadSettings,
+  DEFAULT_SETTINGS, INTERVAL_MAX_MS, LIMITS, MODES, MODE_LABELS, MODE_UNITS,
+  addSession, clearHistory, exposureOf, importHistory, loadHistory, loadSettings,
   saveSettings, statsFor,
 } from './storage.js';
 import {
-  advance, createSession, currentRound, finishSession, isLastRound, submitRound,
+  advance, createSession, currentRound, finishSession, isLastRound, nextIntervalMs, submitRound,
 } from './engine.js';
+import {
+  EXPOSURE_STEPS, PERCEPTION_BANDS, bandFor, formatExposure, stepIndexFor,
+} from './perception.js';
 import { barChart, lineChart } from './charts.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -24,7 +27,32 @@ const state = {
   filter: 'all',
   chartIndex: -1,
   typed: '',           // buffer do teclado numérico
+  frameMs: 16.7,       // duração de um quadro, medida no início
 };
+
+/** Abaixo disso a barra de tempo vira um piscar inútil: some da tela. */
+const TIMER_MIN_MS = 1000;
+
+/**
+ * Mede a duração de um quadro do aparelho. É ela que limita a exposição
+ * mínima real: nenhuma tela mostra algo por menos de um quadro.
+ */
+function measureFrame() {
+  let last = 0;
+  const deltas = [];
+  const tick = (ts) => {
+    if (last) deltas.push(ts - last);
+    last = ts;
+    if (deltas.length < 8) {
+      requestAnimationFrame(tick);
+      return;
+    }
+    deltas.sort((a, b) => a - b);
+    state.frameMs = deltas[Math.floor(deltas.length / 2)] || 16.7;
+    renderTrain();
+  };
+  requestAnimationFrame(tick);
+}
 
 /* ===================== controle de tempo cancelável ===================== */
 
@@ -63,6 +91,43 @@ function runTimer(ms) {
   });
 }
 
+/**
+ * Exposição curta: mostra o conteúdo e o retira no primeiro quadro que
+ * alcança o tempo pedido. Devolve a duração REAL em tela, que é sempre um
+ * múltiplo da duração do quadro do aparelho — nenhuma tela consegue menos.
+ */
+function flash(ms) {
+  const el = $('#content');
+  return new Promise((resolve) => {
+    let raf = 0;
+    let t0 = 0;
+    const hide = () => { el.style.visibility = 'hidden'; };
+
+    const step = (ts) => {
+      if (ts - t0 >= ms) {
+        hide();
+        pending = null;
+        resolve({ outcome: 'done', actual: ts - t0 });
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    // Um quadro para pintar o conteúdo, outro para começar a contar.
+    const show = (ts) => {
+      el.style.visibility = 'visible';
+      t0 = ts;
+      raf = requestAnimationFrame(step);
+    };
+
+    el.style.visibility = 'hidden';
+    raf = requestAnimationFrame(show);
+    pending = {
+      resolve: (value) => resolve(value),
+      cancel: () => { cancelAnimationFrame(raf); hide(); },
+    };
+  });
+}
+
 function abortRun() {
   runToken++;
   if (pending) {
@@ -71,6 +136,11 @@ function abortRun() {
     pending = null;
     resolve('abort');
   }
+}
+
+/** Normaliza os retornos de sleep/runTimer/flash em { outcome, actual }. */
+function asOutcome(value) {
+  return typeof value === 'string' ? { outcome: value, actual: null } : value;
 }
 
 /* ============================== feedback ================================ */
@@ -183,15 +253,24 @@ function persist() {
   saveSettings(state.settings);
 }
 
-function totalExposureMs(mode, config) {
-  const perSeries = config.pace === 'perItem' ? config.seconds * config.count : config.seconds;
-  return perSeries * state.settings.series * 1000;
+function totalExposureMs(config) {
+  const perSeries = config.pace === 'perItem' ? config.exposureMs * config.count : config.exposureMs;
+  return perSeries * state.settings.series;
+}
+
+/** Texto do intervalo configurado ("2 s", "entre 2 s e 10 s", "imediato"). */
+function intervalLabel(interval) {
+  if (interval.mode === 'random') {
+    return `entre ${formatExposure(interval.minMs)} e ${formatExposure(interval.maxMs)}`;
+  }
+  return interval.ms === 0 ? 'imediato' : formatExposure(interval.ms);
 }
 
 function renderTrain() {
   const mode = state.settings.mode;
   const c = cfg();
   const limits = LIMITS[mode];
+  const interval = state.settings.interval;
 
   $$('.mode').forEach((btn) => {
     btn.setAttribute('aria-selected', String(btn.dataset.mode === mode));
@@ -212,17 +291,53 @@ function renderTrain() {
     sentence: 'A frase é gerada com exatamente essa quantidade de palavras.',
   }[mode];
 
-  $('#in-seconds').value = c.seconds;
-  $('#out-seconds').textContent = `${c.seconds}s`;
+  // Exposição: o controle anda pelos passos da escala, não por milissegundos.
+  const stepIndex = stepIndexFor(c.exposureMs);
+  const exposure = EXPOSURE_STEPS[stepIndex];
+  c.exposureMs = exposure;
+  $('#in-exposure').max = EXPOSURE_STEPS.length - 1;
+  $('#in-exposure').value = stepIndex;
+  $('#out-exposure').textContent = formatExposure(exposure);
+
+  const band = bandFor(exposure);
+  $('#exposure-band').innerHTML =
+    `<strong>${esc(band.name)}</strong> · ${esc(band.range)}<span>${esc(band.text)}</span>`;
+
+  // Nenhuma tela mostra algo por menos de um quadro: avisar quando for o caso.
+  const frame = state.frameMs;
+  const hz = Math.round(1000 / frame);
+  const frameHint = $('#hint-frame');
+  frameHint.hidden = exposure >= frame;
+  frameHint.textContent =
+    `Sua tela atualiza a ~${hz} Hz, ou seja, um quadro a cada ${frame.toFixed(0)} ms. `
+    + `Pedir ${formatExposure(exposure)} vai mostrar por ${frame.toFixed(0)} ms — o mínimo do aparelho. `
+    + 'A duração real medida aparece no resultado.';
+
   $$('[data-pace]').forEach((btn) => {
     btn.setAttribute('aria-checked', String(btn.dataset.pace === c.pace));
   });
   $('#hint-pace').textContent = c.pace === 'total'
     ? 'O tempo vale para a série inteira.'
-    : `O tempo vale para cada item — ${c.seconds * c.count}s por série.`;
+    : `O tempo vale para cada item — ${formatExposure(exposure * c.count)} por série.`;
 
-  $('#in-series').value = state.settings.series;
-  $('#out-series').textContent = state.settings.series;
+  // Intervalo antes de cada série.
+  $$('[data-interval-mode]').forEach((btn) => {
+    btn.setAttribute('aria-checked', String(btn.dataset.intervalMode === interval.mode));
+  });
+  $('#interval-fixed').hidden = interval.mode !== 'fixed';
+  $('#interval-random').hidden = interval.mode === 'fixed';
+  $('#in-interval').value = interval.ms;
+  $('#in-interval-min').value = interval.minMs;
+  $('#in-interval-max').value = interval.maxMs;
+  $('#out-interval-min').textContent = formatExposure(interval.minMs);
+  $('#out-interval-max').textContent = formatExposure(interval.maxMs);
+  $('#out-interval').textContent = intervalLabel(interval);
+  $('#sw-countdown').checked = interval.showCountdown;
+  $('#hint-interval').textContent = interval.mode === 'random'
+    ? 'A espera é sorteada dentro da faixa a cada série, para a exposição não ser previsível.'
+    : interval.ms === 0
+      ? 'A série aparece assim que você tocar em “Próxima série”.'
+      : 'Espera entre tocar em “Próxima série” e a próxima exposição.';
 
   $('#field-group').hidden = mode !== 'digits';
   $$('[data-group]').forEach((btn) => {
@@ -232,7 +347,8 @@ function renderTrain() {
   const unit = MODE_UNITS[mode];
   const n = state.settings.series;
   $('#estimate').textContent =
-    `${n} série${n > 1 ? 's' : ''} × ${c.count} ${unit} · ${fmtDuration(totalExposureMs(mode, c))} de exposição no total`;
+    `${n} série${n > 1 ? 's' : ''} × ${c.count} ${unit} · ${formatExposure(exposure)} de exposição · `
+    + `intervalo ${intervalLabel(interval)}`;
 
   renderLastSummary();
 }
@@ -304,10 +420,11 @@ async function startSession() {
   const config = {
     mode: state.settings.mode,
     count: cfg().count,
-    seconds: cfg().seconds,
+    exposureMs: cfg().exposureMs,
     pace: cfg().pace,
     group: cfg().group || 0,
     series: state.settings.series,
+    interval: { ...state.settings.interval },
   };
   state.session = createSession(config);
   $('#play').hidden = false;
@@ -322,51 +439,65 @@ async function runRound() {
   if (!round) return;
 
   renderPlayProgress();
-  showStage('ready');
-  $('#ready-kicker').textContent = `Série ${s.index + 1} de ${s.rounds.length}`;
+  const wait = nextIntervalMs(s.config.interval);
 
-  if (state.settings.countdown) {
-    $('#btn-go').hidden = true;
-    $('#ready-hint').textContent = 'Prepare-se…';
-    for (const n of [3, 2, 1]) {
-      $('#countdown').textContent = String(n);
-      $('#countdown').style.animation = 'none';
-      void $('#countdown').offsetWidth;
-      $('#countdown').style.animation = '';
-      beep(520, 55, 0.04);
-      if ((await sleep(650)) === 'abort' || token !== runToken) return;
+  if (wait > 0) {
+    showStage('ready');
+    $('#ready-kicker').textContent = `Série ${s.index + 1} de ${s.rounds.length}`;
+    const showCountdown = s.config.interval.showCountdown;
+    $('#ready-hint').textContent = showCountdown ? 'Prepare-se…' : 'A qualquer momento…';
+    $('#countdown').classList.toggle('countdown--blind', !showCountdown);
+
+    const started = performance.now();
+    let lastBeep = Infinity;
+    while (true) {
+      const left = wait - (performance.now() - started);
+      if (left <= 0) break;
+      const secondsLeft = Math.ceil(left / 1000);
+      if (showCountdown) {
+        $('#countdown').textContent = String(secondsLeft);
+        if (secondsLeft !== lastBeep && secondsLeft <= 3) beep(520, 55, 0.04);
+      } else {
+        $('#countdown').textContent = '•';
+      }
+      lastBeep = secondsLeft;
+      const slice = Math.min(left, left % 1000 || 1000);
+      if (asOutcome(await sleep(slice)).outcome === 'abort' || token !== runToken) return;
     }
-    await memorize(token);
-  } else {
-    $('#countdown').textContent = '👁';
-    $('#ready-hint').textContent = 'Toque quando estiver pronto.';
-    $('#btn-go').hidden = false;
-    $('#btn-go').onclick = () => { $('#btn-go').hidden = true; memorize(token); };
   }
+
+  await memorize(token);
 }
 
 async function memorize(token) {
   const s = state.session;
   const round = currentRound(s);
-  const { mode, config } = { mode: s.mode, config: s.config };
+  const { config } = s;
+  const exposureMs = config.exposureMs;
+  const withTimer = exposureMs >= TIMER_MIN_MS;
 
   showStage('memorize');
   keepAwake(true);
-  beep(880, 60, 0.05);
-  $('#btn-ready').hidden = config.pace === 'perItem';
+  if (withTimer) beep(880, 60, 0.05);
+  $('#btn-ready').hidden = config.pace === 'perItem' || !withTimer;
+  $('#timer-wrap').hidden = !withTimer;
 
-  if (config.pace === 'perItem') {
-    for (let i = 0; i < round.content.items.length; i++) {
-      $('#content').innerHTML = contentMarkup(mode, round.content, config, i);
-      const out = await runTimer(config.seconds * 1000);
-      if (out === 'abort' || token !== runToken) return;
-    }
-  } else {
-    $('#content').innerHTML = contentMarkup(mode, round.content, config);
-    const out = await runTimer(config.seconds * 1000);
-    if (out === 'abort' || token !== runToken) return;
+  const parts = config.pace === 'perItem'
+    ? round.content.items.map((_, i) => i)
+    : [null];
+
+  const measured = [];
+  for (const itemIndex of parts) {
+    $('#content').innerHTML = contentMarkup(s.mode, round.content, config, itemIndex);
+    const result = asOutcome(withTimer ? await runTimer(exposureMs) : await flash(exposureMs));
+    if (result.outcome === 'abort' || token !== runToken) return;
+    measured.push(result.actual ?? exposureMs);
+    if (result.outcome === 'skip') break;
   }
 
+  round.actualExposureMs = measured.reduce((a, b) => a + b, 0) / measured.length;
+  $('#content').innerHTML = '';
+  $('#content').style.visibility = 'visible';
   beep(440, 90, 0.05);
   keepAwake(false);
   toRecall();
@@ -495,8 +626,9 @@ function renderResults(record) {
 
   $('#result-ring').style.setProperty('--p', accuracy);
   $('#result-accuracy').textContent = `${accuracy}%`;
+  const exposure = exposureOf(config);
   $('#result-title').textContent =
-    `${MODE_LABELS[mode]} · ${config.count} ${MODE_UNITS[mode]} · ${config.seconds}s`;
+    `${MODE_LABELS[mode]} · ${config.count} ${MODE_UNITS[mode]} · ${formatExposure(exposure)}`;
 
   const previous = state.history
     .filter((s) => s.mode === mode && s.id !== record.id && s.config.count === config.count);
@@ -509,12 +641,18 @@ function renderResults(record) {
   else sub = `Seu melhor nessa configuração é ${pct(bestBefore)}.`;
   $('#result-sub').textContent = sub;
 
-  $('#result-tiles').innerHTML = [
+  const tiles = [
     tile(`${totals.correct}/${totals.total}`, 'itens certos'),
     tile(`${totals.perfectSeries}/${record.series.length}`, 'séries perfeitas'),
     tile(String(totals.bestStreak), 'melhor sequência'),
     tile(fmtDuration(record.durationMs), 'duração'),
-  ].join('');
+  ];
+  // Em exposições curtas, o tempo real na tela é limitado pelo aparelho:
+  // mostrar o que de fato apareceu, não só o que foi pedido.
+  if (exposure < TIMER_MIN_MS && typeof totals.actualExposureMs === 'number') {
+    tiles.splice(3, 0, tile(`${Math.round(totals.actualExposureMs)} ms`, 'exposição real'));
+  }
+  $('#result-tiles').innerHTML = tiles.join('');
 
   $('#result-series').innerHTML = record.series
     .map((s, i) => {
@@ -556,6 +694,8 @@ function renderHistory() {
     trendTile,
   ].join('');
 
+  renderBandTable(stats.level);
+
   const recent = list.slice(-30);
   state.chartIndex = clamp(state.chartIndex, -1, recent.length - 1);
   $('#chart-accuracy').innerHTML = lineChart(
@@ -576,6 +716,32 @@ function renderHistory() {
     : '<p class="empty">Nenhuma sessão registrada ainda.</p>';
 }
 
+/** Tabela de faixas, com a faixa alcançada em destaque. */
+function renderBandTable(level) {
+  $('#level-headline').innerHTML = level
+    ? `<span class="level__value">${esc(formatExposure(level.exposureMs))}</span>
+       <span class="level__name">${esc(level.band.name)}</span>
+       <span class="level__note">nível alcançado · ${esc(level.band.range)}</span>`
+    : `<span class="level__value">—</span>
+       <span class="level__name">Sem nível ainda</span>
+       <span class="level__note">acerte uma série inteira para marcar a sua faixa</span>`;
+
+  $('#band-table').innerHTML = PERCEPTION_BANDS.map((band) => {
+    const current = level && level.band.id === band.id;
+    const badge = current
+      ? `<span class="band-row__badge">seu nível — ${esc(formatExposure(level.exposureMs))}</span>`
+      : '';
+    return `<div class="band-row${current ? ' is-current' : ''}">
+        <div class="band-row__range">${esc(band.range)}</div>
+        <div>
+          <div class="band-row__name">${esc(band.name)}</div>
+          <div class="band-row__text">${esc(band.text)}</div>
+          ${badge}
+        </div>
+      </div>`;
+  }).join('');
+}
+
 function renderChartCaption(recent) {
   const caption = $('#chart-caption');
   if (!recent.length) { caption.textContent = ''; return; }
@@ -586,7 +752,7 @@ function renderChartCaption(recent) {
   }
   const s = recent[i];
   caption.textContent =
-    `${fmtDateTime(s.finishedAt)} · ${MODE_LABELS[s.mode]} · ${s.config.count} × ${s.config.seconds}s · ${pct(s.totals.accuracy)}`;
+    `${fmtDateTime(s.finishedAt)} · ${MODE_LABELS[s.mode]} · ${s.config.count} × ${formatExposure(exposureOf(s.config))} · ${pct(s.totals.accuracy)}`;
 }
 
 function historyItem(s) {
@@ -594,7 +760,7 @@ function historyItem(s) {
   return `<article class="history-item">
       <div class="history-item__main">
         <div class="history-item__title">${MODE_LABELS[s.mode]} · ${s.config.count} ${esc(MODE_UNITS[s.mode])}</div>
-        <div class="history-item__meta">${fmtDateTime(s.finishedAt)} · ${s.config.seconds}s${s.config.pace === 'perItem' ? '/item' : ''} · ${s.series.length} séries · ${s.totals.perfectSeries} perfeitas</div>
+        <div class="history-item__meta">${fmtDateTime(s.finishedAt)} · ${formatExposure(exposureOf(s.config))}${s.config.pace === 'perItem' ? '/item' : ''} · ${s.series.length} séries · ${s.totals.perfectSeries} perfeitas</div>
       </div>
       <div class="history-item__score${acc >= 90 ? ' is-high' : ''}">${acc}%</div>
     </article>`;
@@ -643,7 +809,6 @@ function applyTheme() {
 
 function renderSettings() {
   $('#sw-accents').checked = state.settings.strictAccents;
-  $('#sw-countdown').checked = state.settings.countdown;
   $('#sw-sound').checked = state.settings.sound;
   $('#sw-haptics').checked = state.settings.haptics;
   applyTheme();
@@ -670,24 +835,62 @@ function bindEvents() {
     } else if (key === 'count') {
       const l = LIMITS[state.settings.mode];
       cfg().count = clamp(value, l.min, l.max);
-    } else if (key === 'seconds') {
-      cfg().seconds = clamp(value, 1, 120);
+    } else if (key === 'exposureIndex') {
+      cfg().exposureMs = EXPOSURE_STEPS[clamp(value, 0, EXPOSURE_STEPS.length - 1)];
+    } else if (key === 'interval') {
+      state.settings.interval.ms = clamp(value, 0, INTERVAL_MAX_MS);
     }
     persist();
     renderTrain();
   };
 
   $('#in-count').addEventListener('input', (e) => setValue('count', Number(e.target.value)));
-  $('#in-seconds').addEventListener('input', (e) => setValue('seconds', Number(e.target.value)));
   $('#in-series').addEventListener('input', (e) => setValue('series', Number(e.target.value)));
+  $('#in-exposure').addEventListener('input', (e) => setValue('exposureIndex', Number(e.target.value)));
+  $('#in-interval').addEventListener('input', (e) => setValue('interval', Number(e.target.value)));
+
+  $('#in-interval-min').addEventListener('input', (e) => {
+    const interval = state.settings.interval;
+    interval.minMs = clamp(Number(e.target.value), 0, INTERVAL_MAX_MS);
+    if (interval.maxMs < interval.minMs) interval.maxMs = interval.minMs;
+    persist();
+    renderTrain();
+  });
+  $('#in-interval-max').addEventListener('input', (e) => {
+    const interval = state.settings.interval;
+    interval.maxMs = clamp(Number(e.target.value), 0, INTERVAL_MAX_MS);
+    if (interval.minMs > interval.maxMs) interval.minMs = interval.maxMs;
+    persist();
+    renderTrain();
+  });
+
+  $$('[data-interval-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.settings.interval.mode = btn.dataset.intervalMode;
+      persist();
+      renderTrain();
+    });
+  });
 
   $$('[data-step]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const key = btn.dataset.step;
       const delta = Number(btn.dataset.delta);
-      const current = key === 'series' ? state.settings.series : cfg()[key];
-      setValue(key, current + delta);
+      if (key === 'exposure') {
+        setValue('exposureIndex', stepIndexFor(cfg().exposureMs) + delta);
+      } else if (key === 'interval') {
+        setValue('interval', state.settings.interval.ms + delta * 500);
+      } else {
+        const current = key === 'series' ? state.settings.series : cfg()[key];
+        setValue(key, current + delta);
+      }
     });
+  });
+
+  $('#sw-countdown').addEventListener('change', (e) => {
+    state.settings.interval.showCountdown = e.target.checked;
+    persist();
+    renderTrain();
   });
 
   $$('[data-pace]').forEach((btn) => {
@@ -735,10 +938,17 @@ function bindEvents() {
   $('#btn-again').addEventListener('click', () => { showView('train'); startSession(); });
   $('#btn-harder').addEventListener('click', () => {
     const l = LIMITS[state.settings.mode];
-    cfg().count = clamp(cfg().count + 1, l.min, l.max);
+    const index = stepIndexFor(cfg().exposureMs);
+    // Alterna entre um item a mais e um passo de exposição a menos.
+    if (state.record?.totals.perfectSeries === state.record?.series.length && index > 0) {
+      cfg().exposureMs = EXPOSURE_STEPS[index - 1];
+      toast(`Exposição: ${formatExposure(cfg().exposureMs)}.`);
+    } else {
+      cfg().count = clamp(cfg().count + 1, l.min, l.max);
+      toast(`Dificuldade: ${cfg().count} ${MODE_UNITS[state.settings.mode]}.`);
+    }
     persist();
     showView('train');
-    toast(`Dificuldade: ${cfg().count} ${MODE_UNITS[state.settings.mode]}.`);
     renderTrain();
   });
   $('#btn-to-history').addEventListener('click', () => showView('history'));
@@ -796,7 +1006,6 @@ function bindEvents() {
     });
   };
   toggle('#sw-accents', 'strictAccents');
-  toggle('#sw-countdown', 'countdown');
   toggle('#sw-sound', 'sound');
   toggle('#sw-haptics', 'haptics');
 
@@ -829,6 +1038,7 @@ function init() {
   renderSettings();
   renderTrain();
   showView('train');
+  measureFrame();
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

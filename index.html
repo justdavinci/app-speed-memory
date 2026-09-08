@@ -62,20 +62,63 @@
 
           <div class="field">
             <div class="field__head">
-              <label class="field__label" id="label-seconds">Tempo de exposição</label>
-              <output class="field__value" id="out-seconds">10s</output>
+              <label class="field__label" id="label-exposure">Tempo de exposição</label>
+              <output class="field__value" id="out-exposure">10 s</output>
             </div>
             <div class="stepper">
-              <button class="stepper__btn" data-step="seconds" data-delta="-1" aria-label="Diminuir tempo">−</button>
-              <input class="stepper__range" id="in-seconds" type="range" min="1" max="120" step="1" value="10"
-                     aria-labelledby="label-seconds" />
-              <button class="stepper__btn" data-step="seconds" data-delta="1" aria-label="Aumentar tempo">+</button>
+              <button class="stepper__btn" data-step="exposure" data-delta="-1" aria-label="Diminuir tempo">−</button>
+              <input class="stepper__range" id="in-exposure" type="range" min="0" max="42" step="1" value="32"
+                     aria-labelledby="label-exposure" />
+              <button class="stepper__btn" data-step="exposure" data-delta="1" aria-label="Aumentar tempo">+</button>
             </div>
+            <p class="band" id="exposure-band"></p>
+            <p class="field__hint field__hint--warn" id="hint-frame" hidden></p>
             <div class="segmented" role="radiogroup" aria-label="Ritmo de exibição">
               <button class="segmented__opt" data-pace="total" role="radio" aria-checked="true">Tudo de uma vez</button>
               <button class="segmented__opt" data-pace="perItem" role="radio" aria-checked="false">Um por um</button>
             </div>
             <p class="field__hint" id="hint-pace">O tempo vale para a série inteira.</p>
+          </div>
+
+          <div class="field">
+            <div class="field__head">
+              <label class="field__label" id="label-interval">Intervalo antes de cada série</label>
+              <output class="field__value" id="out-interval">2 s</output>
+            </div>
+            <div class="segmented" role="radiogroup" aria-label="Tipo de intervalo">
+              <button class="segmented__opt" data-interval-mode="fixed" role="radio" aria-checked="true">Fixo</button>
+              <button class="segmented__opt" data-interval-mode="random" role="radio" aria-checked="false">Aleatório</button>
+            </div>
+
+            <div class="stepper" id="interval-fixed">
+              <button class="stepper__btn" data-step="interval" data-delta="-1" aria-label="Diminuir intervalo">−</button>
+              <input class="stepper__range" id="in-interval" type="range" min="0" max="15000" step="500" value="2000"
+                     aria-labelledby="label-interval" />
+              <button class="stepper__btn" data-step="interval" data-delta="1" aria-label="Aumentar intervalo">+</button>
+            </div>
+
+            <div class="range-pair" id="interval-random" hidden>
+              <label class="range-pair__row">
+                <span>Mínimo</span>
+                <input class="stepper__range" id="in-interval-min" type="range" min="0" max="15000" step="500" value="2000" />
+                <output id="out-interval-min">2 s</output>
+              </label>
+              <label class="range-pair__row">
+                <span>Máximo</span>
+                <input class="stepper__range" id="in-interval-max" type="range" min="0" max="15000" step="500" value="10000" />
+                <output id="out-interval-max">10 s</output>
+              </label>
+            </div>
+
+            <label class="switch">
+              <span>
+                <strong>Mostrar a contagem</strong>
+                <small>Desligada, a série aparece de surpresa.</small>
+              </span>
+              <input type="checkbox" id="sw-countdown" checked />
+              <span class="switch__track" aria-hidden="true"></span>
+            </label>
+            <p class="field__hint" id="hint-interval">Espera entre tocar em “Próxima série” e a próxima exposição.</p>
           </div>
 
           <div class="field">
@@ -135,6 +178,20 @@
         <div class="card">
           <h2 class="card__title">Itens memorizados por sessão</h2>
           <div class="chart chart--bars" id="chart-items"></div>
+        </div>
+
+        <div class="card">
+          <h2 class="card__title">Classificação por tempo de exposição</h2>
+          <div class="level" id="level-headline"></div>
+          <p class="prose">
+            O seu nível é a <strong>menor exposição em que você já acertou uma série
+            inteira</strong> — acertar tudo prova que aquele tempo bastou.
+          </p>
+          <div class="bands" id="band-table"></div>
+          <p class="chart__caption">
+            Referências da literatura de percepção visual e memória icônica, para situar
+            o treino. Valores típicos em condições ideais, não um diagnóstico.
+          </p>
         </div>
 
         <h2 class="section-title">Sessões</h2>
@@ -200,14 +257,6 @@
           <h2 class="card__title">Durante o treino</h2>
           <label class="switch">
             <span>
-              <strong>Contagem regressiva</strong>
-              <small>3, 2, 1 antes de cada série.</small>
-            </span>
-            <input type="checkbox" id="sw-countdown" checked />
-            <span class="switch__track" aria-hidden="true"></span>
-          </label>
-          <label class="switch">
-            <span>
               <strong>Som</strong>
               <small>Bipe no início e no fim da exposição.</small>
             </span>
@@ -264,15 +313,16 @@
       <p class="stage__kicker" id="ready-kicker">Série 1 de 10</p>
       <div class="countdown" id="countdown">3</div>
       <p class="stage__hint" id="ready-hint">Prepare-se…</p>
-      <button class="btn btn--primary btn--lg" id="btn-go" hidden>Mostrar agora</button>
     </div>
 
     <!-- Memorização -->
     <div class="stage" id="stage-memorize" hidden>
-      <div class="timer">
-        <div class="timer__fill" id="timer-fill"></div>
+      <div class="timer-wrap" id="timer-wrap">
+        <div class="timer">
+          <div class="timer__fill" id="timer-fill"></div>
+        </div>
+        <div class="timer__label"><span id="timer-left">10,0</span>s</div>
       </div>
-      <div class="timer__label"><span id="timer-left">10,0</span>s</div>
       <div class="content" id="content"></div>
       <button class="btn btn--ghost" id="btn-ready">Já memorizei</button>
     </div>

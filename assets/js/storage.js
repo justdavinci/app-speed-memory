@@ -1,5 +1,6 @@
 // Persistência local (localStorage) de preferências e histórico.
 import { avg, uid } from './util.js';
+import { MAX_EXPOSURE_MS, MIN_EXPOSURE_MS, bandFor } from './perception.js';
 
 const SETTINGS_KEY = 'speedmemory.settings.v1';
 const HISTORY_KEY = 'speedmemory.history.v1';
@@ -26,21 +27,31 @@ export const LIMITS = {
   sentence: { min: 3, max: 30 },
 };
 
+export const INTERVAL_MAX_MS = 15000;
+
 export const DEFAULT_SETTINGS = {
-  version: 1,
+  version: 2,
   theme: 'auto',
   mode: 'digits',
   series: 10,
   strictAccents: false,
-  countdown: true,
   sound: true,
   haptics: true,
+  // Espera entre o fim de uma série e a próxima exposição.
+  interval: { mode: 'fixed', ms: 2000, minMs: 2000, maxMs: 10000, showCountdown: true },
   perMode: {
-    digits: { count: 8, seconds: 10, pace: 'total', group: 3 },
-    words: { count: 5, seconds: 15, pace: 'total', group: 0 },
-    sentence: { count: 8, seconds: 15, pace: 'total', group: 0 },
+    digits: { count: 8, exposureMs: 10000, pace: 'total', group: 3 },
+    words: { count: 5, exposureMs: 15000, pace: 'total', group: 0 },
+    sentence: { count: 8, exposureMs: 15000, pace: 'total', group: 0 },
   },
 };
+
+/** Exposição de uma configuração, aceitando registros antigos em segundos. */
+export function exposureOf(config) {
+  if (!config) return 0;
+  if (typeof config.exposureMs === 'number') return config.exposureMs;
+  return (config.seconds || 0) * 1000;
+}
 
 /** localStorage pode falhar (aba privada, cookies bloqueados): cai para memória. */
 const memory = new Map();
@@ -64,17 +75,49 @@ export function loadSettings() {
   const raw = readRaw(SETTINGS_KEY);
   if (!raw) return structuredCloneSafe(DEFAULT_SETTINGS);
   try {
-    const saved = JSON.parse(raw);
-    const merged = { ...structuredCloneSafe(DEFAULT_SETTINGS), ...saved };
-    merged.perMode = { ...DEFAULT_SETTINGS.perMode };
-    for (const m of MODES) {
-      merged.perMode[m] = { ...DEFAULT_SETTINGS.perMode[m], ...(saved.perMode?.[m] || {}) };
-    }
-    if (!MODES.includes(merged.mode)) merged.mode = 'digits';
-    return merged;
+    return migrateSettings(JSON.parse(raw));
   } catch (_) {
     return structuredCloneSafe(DEFAULT_SETTINGS);
   }
+}
+
+/** Normaliza ajustes salvos, inclusive os da versão 1 (tempo em segundos). */
+export function migrateSettings(saved) {
+  const merged = { ...structuredCloneSafe(DEFAULT_SETTINGS), ...saved };
+
+  merged.interval = { ...DEFAULT_SETTINGS.interval, ...(saved.interval || {}) };
+  // v1 guardava um único booleano de contagem regressiva.
+  if (saved.interval === undefined && typeof saved.countdown === 'boolean') {
+    merged.interval.showCountdown = saved.countdown;
+  }
+  delete merged.countdown;
+  merged.interval.mode = merged.interval.mode === 'random' ? 'random' : 'fixed';
+  merged.interval.ms = clampMs(merged.interval.ms, 0, INTERVAL_MAX_MS);
+  merged.interval.minMs = clampMs(merged.interval.minMs, 0, INTERVAL_MAX_MS);
+  merged.interval.maxMs = clampMs(merged.interval.maxMs, merged.interval.minMs, INTERVAL_MAX_MS);
+
+  merged.perMode = { ...DEFAULT_SETTINGS.perMode };
+  for (const m of MODES) {
+    const savedMode = saved.perMode?.[m] || {};
+    const mode = { ...DEFAULT_SETTINGS.perMode[m], ...savedMode };
+    // v1 guardava `seconds`; v2 guarda `exposureMs`.
+    if (savedMode.exposureMs === undefined && typeof savedMode.seconds === 'number') {
+      mode.exposureMs = savedMode.seconds * 1000;
+    }
+    delete mode.seconds;
+    mode.exposureMs = clampMs(mode.exposureMs, MIN_EXPOSURE_MS, MAX_EXPOSURE_MS);
+    merged.perMode[m] = mode;
+  }
+
+  if (!MODES.includes(merged.mode)) merged.mode = DEFAULT_SETTINGS.mode;
+  merged.version = DEFAULT_SETTINGS.version;
+  return merged;
+}
+
+function clampMs(value, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, Math.round(n)));
 }
 
 export function saveSettings(settings) {
@@ -132,7 +175,7 @@ export function statsFor(history, mode) {
     .sort((a, b) => new Date(a.finishedAt) - new Date(b.finishedAt));
 
   if (!list.length) {
-    return { sessions: 0, best: null, bestSpan: 0, recent: 0, trend: null, list };
+    return { sessions: 0, best: null, bestSpan: 0, recent: 0, trend: null, level: null, list };
   }
 
   const acc = list.map((s) => s.totals.accuracy);
@@ -160,8 +203,24 @@ export function statsFor(history, mode) {
     bestSpan,
     recent: avg(last5),
     trend: prev5.length ? avg(last5) - avg(prev5) : null,
+    level: levelFrom(list),
     list,
   };
+}
+
+/**
+ * Nível perceptual alcançado: a menor exposição em que a pessoa já acertou
+ * uma série inteira. Uma série perfeita prova que o tempo foi suficiente;
+ * uma sessão só com acertos parciais, não.
+ *
+ * @returns {{exposureMs:number, band:object, session:object}|null}
+ */
+export function levelFrom(history) {
+  const proven = history.filter((s) => s.totals?.perfectSeries > 0 && exposureOf(s.config) > 0);
+  if (!proven.length) return null;
+  const best = proven.reduce((a, b) => (exposureOf(b.config) < exposureOf(a.config) ? b : a));
+  const exposureMs = exposureOf(best.config);
+  return { exposureMs, band: bandFor(exposureMs), session: best };
 }
 
 function structuredCloneSafe(obj) {

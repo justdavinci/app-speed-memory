@@ -10,8 +10,15 @@ import {
   ADJ_PERSON, ADJ_THING, OBJECTS, SUBJECTS, VERBS_INTRANS, VERBS_TRANS, WORD_BANK,
 } from '../assets/js/generators/lexicon.js';
 import { parseInput, scoreSeries, summarize } from '../assets/js/scoring.js';
-import { advance, createSession, finishSession, submitRound } from '../assets/js/engine.js';
-import { importHistory, statsFor } from '../assets/js/storage.js';
+import {
+  advance, createSession, finishSession, nextIntervalMs, submitRound,
+} from '../assets/js/engine.js';
+import {
+  DEFAULT_SETTINGS, exposureOf, importHistory, levelFrom, migrateSettings, statsFor,
+} from '../assets/js/storage.js';
+import {
+  EXPOSURE_STEPS, MIN_EXPOSURE_MS, PERCEPTION_BANDS, bandFor, formatExposure, stepIndexFor,
+} from '../assets/js/perception.js';
 
 let passed = 0;
 let failed = 0;
@@ -264,13 +271,13 @@ test('summarize soma acertos, séries perfeitas e a melhor sequência', () => {
 group('Sessão');
 
 test('cria uma sessão com o número de séries pedido', () => {
-  const s = createSession({ mode: 'words', count: 4, seconds: 5, pace: 'total', series: 10 });
+  const s = createSession({ mode: 'words', count: 4, exposureMs: 5000, pace: 'total', series: 10 });
   assert.equal(s.rounds.length, 10);
   s.rounds.forEach((r) => assert.equal(r.content.items.length, 4));
 });
 
 test('sessão completa gera o registro do histórico', () => {
-  const s = createSession({ mode: 'digits', count: 5, seconds: 5, pace: 'total', series: 3 });
+  const s = createSession({ mode: 'digits', count: 5, exposureMs: 5000, pace: 'total', series: 3 });
   s.rounds.forEach((round, i) => {
     submitRound(s, i === 1 ? '00000' : round.content.display);
     if (i < 2) advance(s);
@@ -285,9 +292,116 @@ test('sessão completa gera o registro do histórico', () => {
 
 test('cada modo gera o conteúdo do tamanho certo', () => {
   for (const [mode, count] of [['digits', 7], ['words', 6], ['sentence', 9]]) {
-    const s = createSession({ mode, count, seconds: 5, pace: 'total', series: 2 });
+    const s = createSession({ mode, count, exposureMs: 5000, pace: 'total', series: 2 });
     s.rounds.forEach((r) => assert.equal(r.content.answer.length, count, `modo ${mode}`));
   }
+});
+
+/* ---------------------- exposição e classificação ----------------------- */
+
+group('Exposição e faixas perceptuais');
+
+test('a escala de exposição vai de 5 ms a 2 minutos, sempre crescendo', () => {
+  assert.equal(MIN_EXPOSURE_MS, 5);
+  assert.equal(EXPOSURE_STEPS[EXPOSURE_STEPS.length - 1], 120000);
+  for (let i = 1; i < EXPOSURE_STEPS.length; i++) {
+    assert.ok(EXPOSURE_STEPS[i] > EXPOSURE_STEPS[i - 1], 'a escala precisa ser crescente');
+  }
+});
+
+test('stepIndexFor devolve o passo mais próximo', () => {
+  assert.equal(EXPOSURE_STEPS[stepIndexFor(5)], 5);
+  assert.equal(EXPOSURE_STEPS[stepIndexFor(9)], 8);
+  assert.equal(EXPOSURE_STEPS[stepIndexFor(10000)], 10000);
+  assert.equal(EXPOSURE_STEPS[stepIndexFor(999999)], 120000);
+});
+
+test('formatExposure usa ms abaixo de 1 s e segundos acima', () => {
+  assert.equal(formatExposure(5), '5 ms');
+  assert.equal(formatExposure(250), '250 ms');
+  assert.equal(formatExposure(1000), '1 s');
+  assert.equal(formatExposure(1500), '1,5 s');
+});
+
+test('as faixas cobrem toda a escala sem buraco', () => {
+  for (const ms of EXPOSURE_STEPS) assert.ok(bandFor(ms), `sem faixa para ${ms} ms`);
+  assert.equal(bandFor(5).id, 'limiar');
+  assert.equal(bandFor(10).id, 'limiar');
+  assert.equal(bandFor(11).id, 'identificacao');
+  assert.equal(bandFor(50).id, 'multiplo');
+  assert.equal(bandFor(100).id, 'iconica');
+  assert.equal(bandFor(200).id, 'codificacao');
+  assert.equal(bandFor(500).id, 'memoria');
+  assert.equal(bandFor(10000).id, 'livre');
+});
+
+test('os limites das faixas são crescentes', () => {
+  for (let i = 1; i < PERCEPTION_BANDS.length; i++) {
+    assert.ok(PERCEPTION_BANDS[i].max > PERCEPTION_BANDS[i - 1].max);
+  }
+});
+
+/* ---------------------------- intervalo --------------------------------- */
+
+group('Intervalo entre séries');
+
+test('intervalo fixo devolve sempre o mesmo valor', () => {
+  assert.equal(nextIntervalMs({ mode: 'fixed', ms: 2000 }), 2000);
+  assert.equal(nextIntervalMs({ mode: 'fixed', ms: 0 }), 0);
+});
+
+test('intervalo aleatório fica dentro da faixa pedida', () => {
+  for (let i = 0; i < 500; i++) {
+    const ms = nextIntervalMs({ mode: 'random', minMs: 2000, maxMs: 10000 });
+    assert.ok(ms >= 2000 && ms <= 10000, `fora da faixa: ${ms}`);
+  }
+});
+
+test('intervalo aleatório varia de fato', () => {
+  const valores = new Set();
+  for (let i = 0; i < 200; i++) valores.add(nextIntervalMs({ mode: 'random', minMs: 2000, maxMs: 10000 }));
+  assert.ok(valores.size > 10, 'deveria sortear valores diferentes');
+});
+
+test('faixa invertida não quebra o sorteio', () => {
+  for (let i = 0; i < 100; i++) {
+    const ms = nextIntervalMs({ mode: 'random', minMs: 9000, maxMs: 3000 });
+    assert.ok(ms >= 3000 && ms <= 9000);
+  }
+});
+
+/* --------------------------- ajustes salvos ----------------------------- */
+
+group('Migração de ajustes');
+
+test('ajustes da v1 em segundos viram milissegundos', () => {
+  const v1 = { version: 1, perMode: { digits: { count: 9, seconds: 12, pace: 'total', group: 2 } } };
+  const m = migrateSettings(v1);
+  assert.equal(m.perMode.digits.exposureMs, 12000);
+  assert.equal(m.perMode.digits.count, 9);
+  assert.ok(!('seconds' in m.perMode.digits));
+  assert.equal(m.version, DEFAULT_SETTINGS.version);
+});
+
+test('a contagem regressiva da v1 vira ajuste do intervalo', () => {
+  assert.equal(migrateSettings({ version: 1, countdown: false }).interval.showCountdown, false);
+  assert.equal(migrateSettings({ version: 1, countdown: true }).interval.showCountdown, true);
+});
+
+test('exposição salva fora dos limites é contida', () => {
+  assert.equal(migrateSettings({ perMode: { digits: { exposureMs: 1 } } }).perMode.digits.exposureMs, 5);
+  assert.equal(migrateSettings({ perMode: { digits: { exposureMs: 9e9 } } }).perMode.digits.exposureMs, 120000);
+});
+
+test('faixa de intervalo é normalizada (máximo nunca abaixo do mínimo)', () => {
+  const m = migrateSettings({ interval: { mode: 'random', minMs: 9000, maxMs: 1000 } });
+  assert.ok(m.interval.maxMs >= m.interval.minMs);
+});
+
+test('exposureOf entende registros antigos e novos', () => {
+  assert.equal(exposureOf({ seconds: 10 }), 10000);
+  assert.equal(exposureOf({ exposureMs: 50 }), 50);
+  assert.equal(exposureOf(null), 0);
 });
 
 /* ------------------------------ histórico ------------------------------- */
@@ -297,7 +411,7 @@ group('Histórico');
 const fakeSession = (mode, accuracy, count, when, perfectSeries = 0) => ({
   id: `${mode}-${when}`,
   mode,
-  config: { count, seconds: 10, pace: 'total', series: 10 },
+  config: { count, exposureMs: 10000, pace: 'total', series: 10 },
   finishedAt: new Date(when).toISOString(),
   totals: { accuracy, correct: Math.round(accuracy * 100), total: 100, perfectSeries, bestStreak: perfectSeries },
   series: [],
@@ -330,6 +444,27 @@ test('statsFor devolve zeros quando não há sessões', () => {
   const stats = statsFor([], 'digits');
   assert.equal(stats.sessions, 0);
   assert.equal(stats.best, null);
+});
+
+test('o nível é a menor exposição com uma série perfeita', () => {
+  const rec = (ms, perfectSeries) => ({
+    id: `s${ms}`, mode: 'digits', config: { count: 5, exposureMs: ms },
+    finishedAt: new Date(2025, 0, 1).toISOString(),
+    totals: { accuracy: 0.8, correct: 8, total: 10, perfectSeries }, series: [],
+  });
+  const level = levelFrom([rec(10000, 3), rec(50, 0), rec(200, 1)]);
+  assert.equal(level.exposureMs, 200, 'sessão sem série perfeita não conta');
+  assert.equal(level.band.id, 'codificacao');
+});
+
+test('sem nenhuma série perfeita não há nível', () => {
+  assert.equal(levelFrom([{ config: { exposureMs: 50 }, totals: { perfectSeries: 0 } }]), null);
+});
+
+test('statsFor expõe o nível junto das demais estatísticas', () => {
+  const stats = statsFor([fakeSession('digits', 1, 8, 2024, 2)], 'digits');
+  assert.ok(stats.level, 'deveria haver nível');
+  assert.equal(stats.level.exposureMs, 10000);
 });
 
 test('importHistory rejeita conteúdo que não é lista', () => {

@@ -404,10 +404,94 @@ button { cursor: pointer; }
   animation: pop .5s ease;
 }
 
+/* Contagem escondida: só um ponto pulsando, sem dizer quanto falta. */
+.countdown--blind {
+  font-size: 3rem;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: .35; }
+  50% { opacity: 1; }
+}
+
+/* Faixa perceptual do tempo escolhido. */
+.band {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+  font-size: .78rem;
+  color: var(--muted);
+}
+.band strong { color: var(--text); font-size: .84rem; }
+.band span { display: block; margin-top: 2px; }
+
+.field__hint--warn { color: var(--warn); }
+
+.range-pair { display: flex; flex-direction: column; gap: 10px; }
+.range-pair__row {
+  display: grid;
+  grid-template-columns: 62px 1fr 54px;
+  align-items: center;
+  gap: 10px;
+  font-size: .82rem;
+  color: var(--muted);
+}
+.range-pair__row output { text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 650; }
+
+/* Nível alcançado, no topo da classificação. */
+.level {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--bg-elev-2)), var(--bg-elev-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.level__value { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.level__name { font-size: .95rem; font-weight: 650; }
+.level__note { grid-column: 1 / -1; font-size: .74rem; color: var(--muted); margin-top: 2px; }
+
+/* Tabela de classificação por exposição. */
+.bands { display: flex; flex-direction: column; gap: 6px; }
+
+.band-row {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-elev-2);
+}
+.band-row.is-current {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elev-2));
+}
+.band-row__range { font-size: .78rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.band-row__name { font-size: .84rem; font-weight: 650; }
+.band-row__text { font-size: .76rem; color: var(--muted); }
+.band-row__badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 700;
+}
+
 @keyframes pop {
   from { transform: scale(.6); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
+
+.timer-wrap { width: 100%; flex: none; display: flex; flex-direction: column; gap: 6px; align-items: center; }
 
 .timer {
   width: 100%;

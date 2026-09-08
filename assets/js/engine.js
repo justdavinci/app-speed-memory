@@ -1,5 +1,5 @@
 // Máquina de estados de uma sessão de treino (sem DOM, para poder ser testada).
-import { uid } from './util.js';
+import { randInt, uid } from './util.js';
 import { generateDigits } from './generators/digits.js';
 import { generateWords } from './generators/words.js';
 import { generateSentence } from './generators/sentences.js';
@@ -38,6 +38,19 @@ export function createSession(config, rnd = Math.random) {
   };
 }
 
+/**
+ * Intervalo de espera até a próxima exposição, em ms.
+ * No modo aleatório sorteia dentro da faixa, para o estímulo não ser previsível.
+ * @param {{mode:string, ms:number, minMs:number, maxMs:number}} interval
+ */
+export function nextIntervalMs(interval, rnd = Math.random) {
+  if (!interval) return 0;
+  if (interval.mode !== 'random') return Math.max(0, interval.ms || 0);
+  const min = Math.max(0, Math.min(interval.minMs, interval.maxMs));
+  const max = Math.max(interval.minMs, interval.maxMs);
+  return randInt(min, max, rnd);
+}
+
 export function currentRound(session) {
   return session.rounds[session.index] || null;
 }
@@ -74,6 +87,12 @@ export function progress(session) {
 export function finishSession(session) {
   const results = session.rounds.filter((r) => r.result).map((r) => r.result);
   const totals = summarize(results);
+  const measured = session.rounds
+    .filter((r) => r.result && typeof r.actualExposureMs === 'number')
+    .map((r) => r.actualExposureMs);
+  totals.actualExposureMs = measured.length
+    ? measured.reduce((a, b) => a + b, 0) / measured.length
+    : null;
   const finishedAt = new Date().toISOString();
   return {
     id: session.id,
@@ -91,6 +110,7 @@ export function finishSession(session) {
         correct: r.result.correct,
         total: r.result.total,
         perfect: r.result.perfect,
+        actualExposureMs: r.actualExposureMs ?? null,
       })),
   };
 }

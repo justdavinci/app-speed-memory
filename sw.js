@@ -1,6 +1,6 @@
 // Service worker: cache do "app shell" para funcionar offline.
 // A versão no nome do cache invalida tudo quando os arquivos mudam.
-const CACHE = 'speed-memory-v1';
+const CACHE = 'speed-memory-v2';
 
 const SHELL = [
   './',
@@ -13,6 +13,7 @@ const SHELL = [
   './assets/js/scoring.js',
   './assets/js/engine.js',
   './assets/js/charts.js',
+  './assets/js/perception.js',
   './assets/js/generators/digits.js',
   './assets/js/generators/words.js',
   './assets/js/generators/sentences.js',
