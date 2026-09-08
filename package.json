@@ -1,0 +1,13 @@
+{
+  "name": "speed-memory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Treino de memória rápida (dígitos, palavras e frases) mobile-first, sem dependências.",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node tests/run.js",
+    "icons": "node scripts/gen-icons.js"
+  },
+  "license": "MIT"
+}
