@@ -8,23 +8,46 @@ export function parseInput(mode, text) {
 }
 
 /**
- * Compara posição a posição a resposta esperada com a digitada.
- * A posição importa: um item esquecido no meio desalinha o restante, como nas
- * competições de memória.
+ * Compara a resposta esperada com a digitada.
+ *
+ * Com `ordered` (padrão), a posição importa: um item esquecido no meio
+ * desalinha o restante, como nas competições de memória. Sem ordem, basta que
+ * o item apareça em algum lugar da resposta — cada item digitado só pode
+ * casar com um esperado, então repetir a mesma palavra não rende dois acertos.
  *
  * @returns {{cells: Array, correct: number, total: number, perfect: boolean, extra: string[]}}
  */
 export function scoreSeries(mode, expected, given, opts = {}) {
   const strictAccents = !!opts.strictAccents;
+  const ordered = opts.ordered !== false;
   const norm = (t) => (mode === 'digits' ? String(t).trim() : normalizeToken(t, strictAccents));
 
-  const cells = expected.map((exp, i) => {
-    const got = given[i];
-    const ok = got !== undefined && norm(got) === norm(exp);
-    return { expected: exp, given: got ?? '', ok, missing: got === undefined };
-  });
+  const cells = [];
+  let extra;
 
-  const extra = given.slice(expected.length);
+  if (ordered) {
+    expected.forEach((exp, i) => {
+      const got = given[i];
+      const ok = got !== undefined && norm(got) === norm(exp);
+      cells.push({ expected: exp, given: got ?? '', ok, missing: got === undefined });
+    });
+    extra = given.slice(expected.length);
+  } else {
+    const pool = given.map(norm);
+    const used = new Array(pool.length).fill(false);
+    for (const exp of expected) {
+      const target = norm(exp);
+      const at = pool.findIndex((g, i) => !used[i] && g === target);
+      if (at >= 0) {
+        used[at] = true;
+        cells.push({ expected: exp, given: given[at], ok: true, missing: false });
+      } else {
+        cells.push({ expected: exp, given: '', ok: false, missing: true });
+      }
+    }
+    extra = given.filter((_, i) => !used[i]);
+  }
+
   const correct = cells.filter((c) => c.ok).length;
 
   return {

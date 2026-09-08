@@ -4,8 +4,8 @@
 import { chunk, clamp, esc, fmtDateTime, fmtDuration, pct } from './util.js';
 import {
   DEFAULT_SETTINGS, INTERVAL_MAX_MS, LIMITS, MODES, MODE_LABELS, MODE_UNITS,
-  addSession, clearHistory, exposureOf, importHistory, loadHistory, loadSettings,
-  saveSettings, statsFor,
+  addSession, addTest, bestTest, clearHistory, exposureOf, importHistory, loadHistory,
+  loadSettings, loadTests, saveSettings, statsFor,
 } from './storage.js';
 import {
   advance, createSession, currentRound, finishSession, isLastRound, nextIntervalMs, submitRound,
@@ -13,6 +13,9 @@ import {
 import {
   EXPOSURE_STEPS, PERCEPTION_BANDS, bandFor, formatExposure, stepIndexFor,
 } from './perception.js';
+import {
+  TEST, createStaircase, currentExposure, finishTest, nextInterval, recordTrial,
+} from './adaptive.js';
 import { barChart, lineChart } from './charts.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -23,6 +26,9 @@ const state = {
   history: loadHistory(),
   session: null,
   record: null,        // último resultado de sessão (tela de resultado)
+  tests: loadTests(),
+  testMode: 'digits',
+  testResult: null,
   view: 'train',
   filter: 'all',
   chartIndex: -1,
@@ -221,14 +227,16 @@ async function keepAwake(on) {
 
 const VIEW_TITLES = {
   train: ['Treinar', 'Escolha o modo e a dificuldade'],
+  test: ['Teste', 'Descubra a sua velocidade de processamento'],
   history: ['Histórico', 'Sua evolução ao longo do tempo'],
   results: ['Resultado', 'Como foi a sua sessão'],
+  'test-result': ['Resultado do teste', 'A sua velocidade estimada'],
   settings: ['Ajustes', 'Preferências do aplicativo'],
 };
 
 function showView(view) {
   state.view = view;
-  for (const name of ['train', 'history', 'results', 'settings']) {
+  for (const name of ['train', 'test', 'history', 'results', 'test-result', 'settings']) {
     $(`#view-${name}`).hidden = name !== view;
   }
   $$('.tab').forEach((tab) => {
@@ -241,6 +249,7 @@ function showView(view) {
   $('#topbar-sub').textContent = sub;
   $('#main').scrollTop = 0;
   if (view === 'history') renderHistory();
+  if (view === 'test') renderTestIntro();
 }
 
 /* ========================= configuração do treino ======================= */
@@ -339,6 +348,15 @@ function renderTrain() {
       ? 'A série aparece assim que você tocar em “Próxima série”.'
       : 'Espera entre tocar em “Próxima série” e a próxima exposição.';
 
+  $('#field-order').hidden = mode !== 'words';
+  const ordered = c.ordered !== false;
+  $$('[data-order]').forEach((btn) => {
+    btn.setAttribute('aria-checked', String((btn.dataset.order === '1') === ordered));
+  });
+  $('#hint-order').textContent = ordered
+    ? 'Cada palavra precisa estar na posição certa.'
+    : 'Vale acertar as palavras em qualquer ordem.';
+
   $('#field-group').hidden = mode !== 'digits';
   $$('[data-group]').forEach((btn) => {
     btn.setAttribute('aria-checked', String(Number(btn.dataset.group) === (c.group || 0)));
@@ -395,7 +413,9 @@ function renderPlayProgress() {
       return `<i class="${cls}"></i>`;
     })
     .join('');
-  $('#play-counter').textContent = `${Math.min(s.index + 1, s.rounds.length)}/${s.rounds.length}`;
+  $('#play-counter').textContent = s.kind === 'test'
+    ? `${Math.min(s.index + 1, TEST.maxTrials)}/${TEST.maxTrials}`
+    : `${Math.min(s.index + 1, s.rounds.length)}/${s.rounds.length}`;
 }
 
 /** Marcação do conteúdo mostrado na memorização. */
@@ -439,7 +459,7 @@ async function runRound() {
   if (!round) return;
 
   renderPlayProgress();
-  const wait = nextIntervalMs(s.config.interval);
+  const wait = round.intervalMs ?? nextIntervalMs(s.config.interval);
 
   if (wait > 0) {
     showStage('ready');
@@ -473,8 +493,10 @@ async function memorize(token) {
   const s = state.session;
   const round = currentRound(s);
   const { config } = s;
-  const exposureMs = config.exposureMs;
-  const withTimer = exposureMs >= TIMER_MIN_MS;
+  const exposureMs = round.exposureMs ?? config.exposureMs;
+  // No teste nunca há barra nem botão de pular: a medida precisa ser o tempo
+  // que o app controlou, e a pessoa não pode encurtar a exposição.
+  const withTimer = s.kind !== 'test' && exposureMs >= TIMER_MIN_MS;
 
   showStage('memorize');
   keepAwake(true);
@@ -542,23 +564,39 @@ function updateWordCount() {
 
 function submitAnswer(text) {
   const s = state.session;
-  const result = submitRound(s, text, { strictAccents: state.settings.strictAccents });
+  const result = submitRound(s, text, {
+    strictAccents: state.settings.strictAccents,
+    ordered: answersMustBeOrdered(s.mode),
+  });
   if (!result) return;
 
   buzz(result.perfect ? 30 : [40, 60, 40]);
   beep(result.perfect ? 880 : 200, result.perfect ? 90 : 160, 0.05);
+
+  if (s.kind === 'test') recordTrial(s.staircase, result);
+
   renderPlayProgress();
   renderFeedback(result);
   showStage('feedback');
-  $('#btn-next').textContent = isLastRound(s) ? 'Ver resultado' : 'Próxima série';
+  $('#btn-next').textContent = testOrSessionDone(s) ? 'Ver resultado' : 'Próxima série';
+}
+
+/** Só palavras soltas podem ser respondidas fora de ordem. */
+function answersMustBeOrdered(mode) {
+  return mode !== 'words' || state.settings.perMode.words.ordered !== false;
+}
+
+function testOrSessionDone(s) {
+  return s.kind === 'test' ? s.staircase.done : isLastRound(s);
 }
 
 function renderFeedback(result) {
   const s = state.session;
   const head = $('#feedback-headline');
+  const livre = !answersMustBeOrdered(s.mode);
   head.textContent = result.perfect
     ? 'Perfeito!'
-    : `${result.correct} de ${result.total} certos`;
+    : `${result.correct} de ${result.total} certos${livre ? ' (ordem livre)' : ''}`;
   head.className = `feedback__headline ${result.perfect ? 'is-ok' : 'is-bad'}`;
 
   const digitCls = s.mode === 'digits' ? ' cell--digit' : '';
@@ -580,6 +618,13 @@ function renderFeedback(result) {
 
 function nextRound() {
   const s = state.session;
+  if (s.kind === 'test') {
+    if (s.staircase.done) { endTest(); return; }
+    advance(s);
+    applyStaircaseToRound();
+    runRound();
+    return;
+  }
   if (isLastRound(s)) {
     endSession();
   } else {
@@ -603,10 +648,13 @@ function endSession() {
 }
 
 async function quitSession() {
+  const isTest = state.session.kind === 'test';
   const done = state.session.rounds.filter((r) => r.result).length;
   const ok = await confirmDialog(
-    'Sair do treino?',
-    done ? `As ${done} séries já respondidas não serão salvas.` : 'A sessão será descartada.',
+    isTest ? 'Sair do teste?' : 'Sair do treino?',
+    done
+      ? `As ${done} séries já respondidas não serão salvas.`
+      : `${isTest ? 'O teste' : 'A sessão'} será descartado.`,
     'Sair',
   );
   if (!ok) return;
@@ -615,7 +663,133 @@ async function quitSession() {
   state.session = null;
   $('#play').hidden = true;
   $('#tabbar').hidden = false;
-  showView('train');
+  showView(isTest ? 'test' : 'train');
+}
+
+/* ========================== teste adaptativo ============================ */
+
+function renderTestIntro() {
+  $$('[data-test-mode]').forEach((btn) => {
+    btn.setAttribute('aria-checked', String(btn.dataset.testMode === state.testMode));
+  });
+
+  const frame = state.frameMs;
+  $('#test-floor-hint').textContent =
+    `Sua tela mostra um quadro a cada ${frame.toFixed(0)} ms (~${Math.round(1000 / frame)} Hz). `
+    + 'O teste não desce abaixo disso, porque tempos menores seriam idênticos na prática.';
+
+  const mine = state.tests.filter((t) => t.mode === state.testMode);
+  const card = $('#test-last-card');
+  card.hidden = !mine.length;
+  if (!mine.length) return;
+
+  const last = mine[mine.length - 1];
+  const best = bestTest(state.tests, state.testMode);
+  $('#test-last-level').innerHTML = levelMarkup(last);
+  $('#test-history').innerHTML = mine.slice().reverse().slice(0, 10).map((t) => `
+      <article class="history-item">
+        <div class="history-item__main">
+          <div class="history-item__title">Nível ${t.level} · ${esc(t.band.name)}</div>
+          <div class="history-item__meta">${fmtDateTime(t.finishedAt)} · ${MODE_LABELS[t.mode]}${t.mode === 'words' && t.ordered === false ? ' (ordem livre)' : ''} · ${t.trials} séries · limiar ${esc(formatExposure(t.thresholdMs))}${t.id === best.id ? ' · melhor' : ''}</div>
+        </div>
+        <div class="history-item__score">${esc(formatExposure(t.thresholdMs))}</div>
+      </article>`).join('');
+}
+
+function levelMarkup(result) {
+  return `<span class="level__value">${result.level}</span>
+    <span class="level__name">${esc(result.band.name)}</span>
+    <span class="level__note">nível ${result.level} de ${result.levels} · limiar ${esc(formatExposure(result.thresholdMs))} · ${esc(result.band.range)}</span>`;
+}
+
+function startTest() {
+  const mode = state.testMode;
+  const count = TEST.itemCount[mode];
+  const staircase = createStaircase({ mode, floorMs: state.frameMs });
+
+  state.session = createSession({
+    mode,
+    count,
+    exposureMs: currentExposure(staircase),
+    pace: 'total',
+    group: 0,
+    series: TEST.maxTrials,
+    interval: { mode: 'random', minMs: TEST.intervalMinMs, maxMs: TEST.intervalMaxMs, showCountdown: false },
+  });
+  state.session.kind = 'test';
+  state.session.staircase = staircase;
+  applyStaircaseToRound();
+
+  $('#play').hidden = false;
+  $('#tabbar').hidden = true;
+  runRound();
+}
+
+/** A escada decide o tempo desta série e a espera até ela. */
+function applyStaircaseToRound() {
+  const s = state.session;
+  const round = currentRound(s);
+  if (!round) return;
+  round.exposureMs = currentExposure(s.staircase);
+  round.intervalMs = nextInterval();
+}
+
+function endTest() {
+  const result = finishTest(state.session.staircase);
+  result.ordered = answersMustBeOrdered(state.session.mode);
+  state.tests = addTest(result);
+  state.testResult = result;
+  state.session = null;
+  abortRun();
+  keepAwake(false);
+  $('#play').hidden = true;
+  $('#tabbar').hidden = false;
+  renderTestResult(result);
+  showView('test-result');
+}
+
+function renderTestResult(result) {
+  $('#test-result-level').innerHTML = levelMarkup(result);
+
+  const notes = {
+    convergiu: `Estimativa a partir de ${result.reversals} viradas da escada — o teste se estabilizou.`,
+    piso: `Você acertou até o degrau mais rápido possível neste aparelho (${formatExposure(result.floorMs)}). O seu limiar pode ser menor do que a tela consegue mostrar.`,
+    teto: 'Você não acertou séries nem no tempo mais longo do teste. Vale repetir com mais calma, ou treinar antes com tempos maiores.',
+    parcial: 'As séries acabaram antes de a escada se estabilizar. O número abaixo é uma estimativa grosseira — repita o teste.',
+  };
+  $('#test-result-note').textContent = notes[result.quality];
+
+  const previous = state.tests.filter((t) => t.mode === result.mode && t.id !== result.id);
+  const best = previous.length ? Math.min(...previous.map((t) => t.thresholdMs)) : null;
+  const tiles = [
+    tile(formatExposure(result.thresholdMs), 'limiar estimado'),
+    tile(String(result.trials), 'séries usadas'),
+    tile(MODE_LABELS[result.mode], 'estímulo'),
+    tile(best === null ? 'primeiro' : formatExposure(best), best === null ? 'teste' : 'melhor anterior'),
+  ];
+  $('#test-result-tiles').innerHTML = tiles.join('');
+
+  $('#test-curve').innerHTML = result.curve.map((point) => {
+    const p = Math.round(point.accuracy * 100);
+    const cls = p >= 80 ? ' is-high' : p <= 40 ? ' is-low' : '';
+    return `<div class="curve__row">
+        <span class="curve__ms">${esc(formatExposure(point.exposureMs))}</span>
+        <span class="curve__bar"><span class="curve__fill${cls}" style="width:${p}%"></span></span>
+        <span class="curve__value">${p}% · ${point.trials}×</span>
+      </div>`;
+  }).join('');
+
+  $('#test-band-table').innerHTML = PERCEPTION_BANDS.map((band) => {
+    const current = band.id === result.band.id;
+    return `<div class="band-row${current ? ' is-current' : ''}">
+        <div class="band-row__range">${esc(band.range)}</div>
+        <div>
+          <div class="band-row__name">Nível ${PERCEPTION_BANDS.length - PERCEPTION_BANDS.indexOf(band)} · ${esc(band.name)}</div>
+          <div class="band-row__text">${esc(band.text)}</div>
+          ${current ? `<span class="band-row__badge">seu resultado — ${esc(formatExposure(result.thresholdMs))}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 /* ============================== resultado =============================== */
@@ -909,6 +1083,35 @@ function bindEvents() {
     });
   });
 
+  $$('[data-order]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.settings.perMode.words.ordered = btn.dataset.order === '1';
+      persist();
+      renderTrain();
+    });
+  });
+
+  $$('[data-test-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.testMode = btn.dataset.testMode;
+      renderTestIntro();
+    });
+  });
+
+  $('#btn-test-start').addEventListener('click', startTest);
+  $('#btn-test-again').addEventListener('click', startTest);
+  $('#btn-test-to-train').addEventListener('click', () => {
+    const result = state.testResult;
+    if (!result) { showView('train'); return; }
+    state.settings.mode = result.mode;
+    cfg().exposureMs = EXPOSURE_STEPS[stepIndexFor(result.thresholdMs)];
+    cfg().count = TEST.itemCount[result.mode];
+    persist();
+    showView('train');
+    renderTrain();
+    toast(`Treino ajustado para ${formatExposure(cfg().exposureMs)}.`);
+  });
+
   $('#btn-start').addEventListener('click', startSession);
   $('#btn-quit').addEventListener('click', quitSession);
   $('#btn-ready').addEventListener('click', () => pending?.skip?.());
@@ -985,10 +1188,11 @@ function bindEvents() {
     if (!ok) return;
     clearHistory();
     state.history = [];
+    state.tests = [];
     state.chartIndex = -1;
     renderHistory();
     renderTrain();
-    toast('Histórico apagado.');
+    toast('Histórico e testes apagados.');
   });
 
   $$('[data-theme-opt]').forEach((btn) => {

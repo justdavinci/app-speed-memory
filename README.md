@@ -15,7 +15,7 @@ servidor**. Todos os dados ficam no próprio aparelho.
 | Modo | O que aparece | O que você digita |
 | --- | --- | --- |
 | Dígitos | Números aleatórios, opcionalmente em blocos de 2, 3 ou 4 | Teclado numérico próprio, na zona do polegar |
-| Palavras | Palavras concretas sorteadas, sem repetir na mesma série | Separadas por espaço ou vírgula |
+| Palavras | Palavras concretas sorteadas, sem repetir na mesma série | Separadas por espaço ou vírgula, **na ordem ou em ordem livre** |
 | Frases | Uma frase gramatical, com o número exato de palavras que você pediu | A frase inteira |
 
 **Tudo configurável**
@@ -30,6 +30,9 @@ servidor**. Todos os dados ficam no próprio aparelho.
 - **Contagem visível ou escondida**: escondida, só um ponto pulsa e a série
   aparece de surpresa.
 - Quantas séries por sessão — o padrão são **sessões de 10 séries**.
+- **Ordem das palavras**: exigir a posição certa de cada uma, ou aceitar as
+  palavras em qualquer ordem (só no modo Palavras — dígitos e frases são
+  posicionais por natureza).
 - Agrupamento dos dígitos, tema, som, vibração e rigor com acentos.
 
 **Correção e evolução**
@@ -85,6 +88,44 @@ São referências da literatura de percepção visual e memória icônica, para
 situar o treino — valores típicos em condições ideais, não um diagnóstico. A
 última linha é uma extensão para os tempos acima da tabela original.
 
+## Teste de velocidade de processamento
+
+Uma aba própria, com um teste adaptativo que estima o menor tempo de exibição
+em que você ainda capta uma sequência curta. É repetível: cada resultado fica
+guardado para comparação.
+
+**Como funciona.** É uma escada psicofísica **2 para baixo, 1 para cima**: duas
+séries seguidas totalmente certas encurtam o tempo de exibição; uma série
+errada alonga. Essa regra converge para o tempo em que você acerta a série
+inteira em cerca de **71%** das vezes — é esse ponto que o teste chama de
+limiar.
+
+- No máximo **30 séries** (3 a 5 minutos), ou menos se a escada estabilizar
+  antes (8 viradas de direção).
+- **Carga fixa**: 4 dígitos ou 3 palavras. Se a quantidade mudasse junto com o
+  tempo, não daria para saber qual das duas coisas o resultado mediu.
+- **Sem contagem** e com espera sorteada entre 1,5 s e 4 s, para você não pegar
+  o ritmo e antecipar o estímulo.
+- Passos largos no começo e estreitos depois das duas primeiras viradas, para
+  chegar perto do limiar rápido e refinar em seguida.
+- O limiar é a **média geométrica das últimas 6 viradas** — geométrica porque a
+  escala de tempos é multiplicativa.
+- A escada nunca desce abaixo de **um quadro da sua tela**: ali os degraus
+  seriam indistinguíveis e o teste mediria ruído.
+
+**O resultado** coloca você em um dos 7 níveis (um para cada faixa da tabela de
+classificação), mostra o limiar estimado e a **precisão média por tempo de
+exibição** — a queda de acerto conforme o tempo encurta. Ele também sinaliza
+quando o número não é confiável: `piso` (você acertou até o degrau mais rápido
+do aparelho), `teto` (não acertou nem no tempo mais longo) ou `parcial` (as
+séries acabaram antes de estabilizar).
+
+**Limites honestos.** O teste estima o tempo que *você* precisa para captar uma
+sequência curta, neste aparelho e nestas condições. Brilho, distância da tela,
+cansaço e atenção mudam o resultado, e repetições variam cerca de um nível para
+mais ou para menos — é a precisão que 30 séries permitem. Não é medida clínica
+nem teste de QI.
+
 ## Como rodar
 
 ```bash
@@ -104,10 +145,13 @@ offline depois da primeira visita.
 npm test
 ```
 
-50 testes sem dependências cobrindo as partes puras: geradores, concordância
-das frases, correção das respostas, motor da sessão, escala de exposição,
-faixas perceptuais, sorteio do intervalo, migração de ajustes antigos e
-estatísticas do histórico. Entre eles, a garantia de que a frase gerada tem
+66 testes sem dependências cobrindo as partes puras: geradores, concordância
+das frases, correção das respostas (com e sem ordem obrigatória), motor da
+sessão, escala de exposição, faixas perceptuais, sorteio do intervalo, migração
+de ajustes antigos, estatísticas do histórico e a escada do teste adaptativo —
+esta última verificada com uma pessoa simulada, conferindo que o teto de 30
+séries é respeitado, que a escada não desce abaixo do piso do aparelho e que
+limiares diferentes produzem estimativas separadas. Entre eles, a garantia de que a frase gerada tem
 **exatamente** o número de palavras pedido (verificado de 3 a 30 palavras) e de
 que artigos e adjetivos concordam em gênero.
 
@@ -141,6 +185,7 @@ assets/js/
   storage.js                   preferências e histórico (localStorage)
   charts.js                    gráficos em SVG puro
   perception.js                escala de exposição e classificação perceptual
+  adaptive.js                  escada psicofísica do teste de velocidade
   util.js                      utilidades (sorteio, normalização de texto, formatação)
   generators/
     digits.js                  sequências numéricas

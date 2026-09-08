@@ -135,6 +135,17 @@
             <p class="field__hint">Padrão: sessões de 10 séries.</p>
           </div>
 
+          <div class="field" id="field-order" hidden>
+            <div class="field__head">
+              <label class="field__label">Ordem das palavras</label>
+            </div>
+            <div class="segmented" role="radiogroup" aria-label="Ordem das palavras">
+              <button class="segmented__opt" data-order="1" role="radio" aria-checked="true">Na ordem</button>
+              <button class="segmented__opt" data-order="0" role="radio" aria-checked="false">Ordem livre</button>
+            </div>
+            <p class="field__hint" id="hint-order">Cada palavra precisa estar na posição certa.</p>
+          </div>
+
           <div class="field" id="field-group">
             <div class="field__head">
               <label class="field__label">Agrupar dígitos</label>
@@ -155,6 +166,75 @@
         <div class="card card--soft" id="last-summary" hidden>
           <h2 class="card__title">Seu último treino neste modo</h2>
           <div class="tiles" id="last-tiles"></div>
+        </div>
+      </section>
+
+      <!-- ============================= TESTE ============================== -->
+      <section class="view" id="view-test" aria-label="Teste de velocidade" hidden>
+        <div class="card">
+          <h2 class="card__title">Teste de velocidade de processamento</h2>
+          <p class="prose">
+            O tempo de exibição se ajusta a cada série: acertou duas seguidas, fica mais
+            rápido; errou, fica mais lento. Assim o teste procura, por tentativa, o menor
+            tempo em que você ainda acerta a série inteira.
+          </p>
+          <ul class="facts">
+            <li><strong>Até 30 séries</strong>, cerca de 3 a 5 minutos.</li>
+            <li><strong>Quantidade fixa</strong> de itens — só o tempo muda, senão não dá para saber o que foi medido.</li>
+            <li><strong>Sem contagem</strong>: a espera é sorteada e a série aparece de surpresa.</li>
+            <li>Responda o que conseguiu; <strong>chutar não atrapalha</strong>.</li>
+          </ul>
+
+          <div class="segmented" role="radiogroup" aria-label="Tipo de estímulo">
+            <button class="segmented__opt" data-test-mode="digits" role="radio" aria-checked="true">4 dígitos</button>
+            <button class="segmented__opt" data-test-mode="words" role="radio" aria-checked="false">3 palavras</button>
+          </div>
+
+          <button class="btn btn--primary btn--lg" id="btn-test-start">Começar o teste</button>
+          <p class="field__hint" id="test-floor-hint"></p>
+        </div>
+
+        <div class="card" id="test-last-card" hidden>
+          <h2 class="card__title">Seu último teste</h2>
+          <div class="level" id="test-last-level"></div>
+          <div id="test-history" class="history-list"></div>
+        </div>
+
+        <div class="card card--soft">
+          <h2 class="card__title">O que este teste é e o que não é</h2>
+          <p class="prose">
+            Ele estima o tempo de exibição que <em>você</em> precisa para captar uma
+            sequência curta, neste aparelho e nestas condições. Brilho, distância da tela,
+            cansaço e atenção mudam o resultado. Repetições variam cerca de um nível para
+            mais ou para menos. Não é medida clínica nem teste de QI.
+          </p>
+        </div>
+      </section>
+
+      <!-- ====================== RESULTADO DO TESTE ======================= -->
+      <section class="view" id="view-test-result" aria-label="Resultado do teste" hidden>
+        <div class="level level--big" id="test-result-level"></div>
+        <p class="result-hero__sub" id="test-result-note"></p>
+
+        <div class="tiles" id="test-result-tiles"></div>
+
+        <div class="card">
+          <h2 class="card__title">Precisão média por tempo de exibição</h2>
+          <div id="test-curve" class="curve"></div>
+          <p class="chart__caption">
+            Cada linha é um tempo por que a escada passou. É essa queda de precisão
+            conforme o tempo encurta que define o seu limiar.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2 class="card__title">Onde isso te coloca</h2>
+          <div class="bands" id="test-band-table"></div>
+        </div>
+
+        <div class="row row--wrap">
+          <button class="btn btn--primary" id="btn-test-again">Refazer o teste</button>
+          <button class="btn btn--ghost" id="btn-test-to-train">Treinar nesse tempo</button>
         </div>
       </section>
 
@@ -288,6 +368,10 @@
       <button class="tab is-active" data-view="train" role="tab" aria-selected="true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8v8M19 8v8" /></svg>
         <span>Treinar</span>
+      </button>
+      <button class="tab" data-view="test" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 13V9M9 2h6" /></svg>
+        <span>Teste</span>
       </button>
       <button class="tab" data-view="history" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 16V9M12 16v-5M16 16V7" /></svg>

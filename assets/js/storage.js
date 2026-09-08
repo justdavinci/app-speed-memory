@@ -4,6 +4,7 @@ import { MAX_EXPOSURE_MS, MIN_EXPOSURE_MS, bandFor } from './perception.js';
 
 const SETTINGS_KEY = 'speedmemory.settings.v1';
 const HISTORY_KEY = 'speedmemory.history.v1';
+const TESTS_KEY = 'speedmemory.tests.v1';
 const HISTORY_LIMIT = 500;
 
 export const MODES = ['digits', 'words', 'sentence'];
@@ -41,7 +42,8 @@ export const DEFAULT_SETTINGS = {
   interval: { mode: 'fixed', ms: 2000, minMs: 2000, maxMs: 10000, showCountdown: true },
   perMode: {
     digits: { count: 8, exposureMs: 10000, pace: 'total', group: 3 },
-    words: { count: 5, exposureMs: 15000, pace: 'total', group: 0 },
+    // `ordered`: exigir a ordem das palavras ou aceitar em qualquer ordem.
+    words: { count: 5, exposureMs: 15000, pace: 'total', group: 0, ordered: true },
     sentence: { count: 8, exposureMs: 15000, pace: 'total', group: 0 },
   },
 };
@@ -106,6 +108,7 @@ export function migrateSettings(saved) {
     }
     delete mode.seconds;
     mode.exposureMs = clampMs(mode.exposureMs, MIN_EXPOSURE_MS, MAX_EXPOSURE_MS);
+    if (m === 'words') mode.ordered = mode.ordered !== false;
     merged.perMode[m] = mode;
   }
 
@@ -151,6 +154,36 @@ export function addSession(session) {
 
 export function clearHistory() {
   writeRaw(HISTORY_KEY, JSON.stringify([]));
+  writeRaw(TESTS_KEY, JSON.stringify([]));
+}
+
+/* --------------------- testes de velocidade ---------------------------- */
+
+export function loadTests() {
+  const raw = readRaw(TESTS_KEY);
+  if (!raw) return [];
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/** Guarda o resultado de um teste e devolve a lista atualizada. */
+export function addTest(result) {
+  const list = loadTests();
+  list.push({ id: uid(), ...result });
+  const trimmed = list.slice(-100);
+  writeRaw(TESTS_KEY, JSON.stringify(trimmed));
+  return trimmed;
+}
+
+/** Melhor resultado (menor limiar) de um modo, para comparar repetições. */
+export function bestTest(tests, mode) {
+  const list = tests.filter((t) => !mode || t.mode === mode);
+  if (!list.length) return null;
+  return list.reduce((a, b) => (b.thresholdMs < a.thresholdMs ? b : a));
 }
 
 /** Importa um histórico exportado; `replace` troca tudo, senão mescla por id. */

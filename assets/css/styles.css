@@ -133,7 +133,7 @@ button { cursor: pointer; }
 
 .tabbar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   padding: 8px 10px calc(var(--safe-bottom) + 8px);
   background: var(--bg-elev);
@@ -151,7 +151,7 @@ button { cursor: pointer; }
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
-  font-size: .72rem;
+  font-size: .68rem;
   font-weight: 600;
 }
 
@@ -455,6 +455,24 @@ button { cursor: pointer; }
 .level__value { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .level__name { font-size: .95rem; font-weight: 650; }
 .level__note { grid-column: 1 / -1; font-size: .74rem; color: var(--muted); margin-top: 2px; }
+
+.level--big { padding: 20px; }
+.level--big .level__value { font-size: 2.4rem; }
+
+/* Lista de fatos da apresentação do teste. */
+.facts { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.facts li { font-size: .84rem; color: var(--muted); }
+.facts strong { color: var(--text); font-weight: 650; }
+
+/* Curva de precisão por tempo de exibição. */
+.curve { display: flex; flex-direction: column; gap: 6px; }
+.curve__row { display: grid; grid-template-columns: 62px 1fr 56px; align-items: center; gap: 10px; font-size: .8rem; }
+.curve__ms { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+.curve__bar { height: 12px; border-radius: 999px; background: var(--bg-elev-2); overflow: hidden; }
+.curve__fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.curve__fill.is-low { background: var(--bad); }
+.curve__fill.is-high { background: var(--ok); }
+.curve__value { font-variant-numeric: tabular-nums; color: var(--muted); }
 
 /* Tabela de classificação por exposição. */
 .bands { display: flex; flex-direction: column; gap: 6px; }

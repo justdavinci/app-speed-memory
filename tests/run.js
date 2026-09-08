@@ -19,6 +19,9 @@ import {
 import {
   EXPOSURE_STEPS, MIN_EXPOSURE_MS, PERCEPTION_BANDS, bandFor, formatExposure, stepIndexFor,
 } from '../assets/js/perception.js';
+import {
+  TEST, accuracyByExposure, createStaircase, currentExposure, finishTest, nextInterval, recordTrial,
+} from '../assets/js/adaptive.js';
 
 let passed = 0;
 let failed = 0;
@@ -264,6 +267,146 @@ test('summarize soma acertos, séries perfeitas e a melhor sequência', () => {
   assert.equal(s.perfectSeries, 3);
   assert.equal(s.bestStreak, 2);
   assert.equal(s.accuracy, 13 / 16);
+});
+
+/* ------------------------ resposta sem ordem ---------------------------- */
+
+group('Correção sem ordem obrigatória');
+
+const semOrdem = { ordered: false };
+
+test('palavras fora de ordem valem quando a ordem é livre', () => {
+  const r = scoreSeries('words', ['casa', 'pipa', 'vela'], ['vela', 'casa', 'pipa'], semOrdem);
+  assert.equal(r.correct, 3);
+  assert.ok(r.perfect);
+});
+
+test('as mesmas palavras fora de ordem erram quando a ordem conta', () => {
+  const r = scoreSeries('words', ['casa', 'pipa', 'vela'], ['vela', 'casa', 'pipa']);
+  assert.equal(r.correct, 0);
+});
+
+test('repetir a mesma palavra não rende dois acertos', () => {
+  const r = scoreSeries('words', ['casa', 'pipa'], ['casa', 'casa'], semOrdem);
+  assert.equal(r.correct, 1);
+  assert.deepEqual(r.extra, ['casa']);
+  assert.ok(!r.perfect);
+});
+
+test('sem ordem, o que não apareceu conta como faltando', () => {
+  const r = scoreSeries('words', ['casa', 'pipa'], ['pipa'], semOrdem);
+  assert.equal(r.correct, 1);
+  assert.ok(r.cells.find((c) => c.expected === 'casa').missing);
+});
+
+test('sem ordem, sobra de palavra impede o "perfeito"', () => {
+  const r = scoreSeries('words', ['casa'], ['casa', 'pipa'], semOrdem);
+  assert.equal(r.correct, 1);
+  assert.ok(!r.perfect);
+});
+
+test('acentuação flexível continua valendo sem ordem', () => {
+  const r = scoreSeries('words', ['coração', 'pipa'], ['pipa', 'coracao'], semOrdem);
+  assert.ok(r.perfect);
+});
+
+/* -------------------------- teste adaptativo ---------------------------- */
+
+group('Teste adaptativo de velocidade');
+
+/** Pessoa simulada: acerta a série inteira com chance que cresce com o tempo. */
+function simulate(realThresholdMs, floorMs = 17, rnd = Math.random) {
+  const st = createStaircase({ mode: 'digits', floorMs });
+  while (!st.done) {
+    const ms = currentExposure(st);
+    const p = 1 / (1 + Math.exp(-(Math.log(ms) - Math.log(realThresholdMs)) * 3));
+    const perfect = rnd() < p;
+    recordTrial(st, { perfect, correct: perfect ? 4 : 2, total: 4 });
+  }
+  return finishTest(st);
+}
+
+test('o teste nunca passa de 30 séries', () => {
+  for (let i = 0; i < 40; i++) {
+    assert.ok(simulate(80).trials <= TEST.maxTrials);
+  }
+});
+
+test('a escada não desce abaixo do piso do aparelho', () => {
+  const st = createStaircase({ mode: 'digits', floorMs: 17 });
+  while (!st.done) recordTrial(st, { perfect: true, correct: 4, total: 4 });
+  assert.ok(st.steps[0] >= 17, `piso ${st.steps[0]} abaixo do quadro`);
+  assert.ok(finishTest(st).thresholdMs >= 17);
+});
+
+test('duas séries certas aceleram; uma errada desacelera', () => {
+  const st = createStaircase({ mode: 'digits', floorMs: 5 });
+  const inicio = currentExposure(st);
+  recordTrial(st, { perfect: true, correct: 4, total: 4 });
+  assert.equal(currentExposure(st), inicio, 'uma só não deveria acelerar');
+  recordTrial(st, { perfect: true, correct: 4, total: 4 });
+  assert.ok(currentExposure(st) < inicio, 'duas seguidas deveriam acelerar');
+  const rapido = currentExposure(st);
+  recordTrial(st, { perfect: false, correct: 1, total: 4 });
+  assert.ok(currentExposure(st) > rapido, 'errar deveria desacelerar');
+});
+
+test('quem acerta tudo termina no piso e é sinalizado', () => {
+  const r = simulate(1, 17, () => 0);   // sempre acerta
+  assert.equal(r.quality, 'piso');
+  assert.equal(r.thresholdMs, r.floorMs);
+  assert.equal(r.level, 7 - PERCEPTION_BANDS.indexOf(bandFor(r.floorMs)));
+});
+
+test('quem erra tudo termina no teto e é sinalizado', () => {
+  const r = simulate(1e9, 17, () => 1); // sempre erra
+  assert.equal(r.quality, 'teto');
+  assert.equal(r.thresholdMs, TEST.ceilingMs);
+  assert.equal(r.level, 1);
+});
+
+test('limiares maiores produzem estimativas maiores', () => {
+  const mediana = (ms) => {
+    const xs = Array.from({ length: 31 }, () => simulate(ms).thresholdMs).sort((a, b) => a - b);
+    return xs[15];
+  };
+  const rapido = mediana(40);
+  const lento = mediana(400);
+  assert.ok(lento > rapido * 2, `esperava separação clara, veio ${rapido} vs ${lento}`);
+});
+
+test('o nível fica dentro da escala de 7 faixas', () => {
+  for (const alvo of [20, 60, 150, 400, 1500]) {
+    const r = simulate(alvo);
+    assert.ok(r.level >= 1 && r.level <= 7, `nível fora da escala: ${r.level}`);
+    assert.equal(r.levels, 7);
+  }
+});
+
+test('a curva agrupa as séries por tempo, do mais lento ao mais rápido', () => {
+  const curva = accuracyByExposure([
+    { exposureMs: 100, perfect: true, accuracy: 1 },
+    { exposureMs: 100, perfect: false, accuracy: 0.5 },
+    { exposureMs: 200, perfect: true, accuracy: 1 },
+  ]);
+  assert.equal(curva.length, 2);
+  assert.equal(curva[0].exposureMs, 200);
+  assert.equal(curva[1].trials, 2);
+  assert.equal(curva[1].accuracy, 0.75);
+});
+
+test('a espera entre séries do teste é sorteada dentro da faixa', () => {
+  for (let i = 0; i < 200; i++) {
+    const ms = nextInterval();
+    assert.ok(ms >= TEST.intervalMinMs && ms <= TEST.intervalMaxMs);
+  }
+});
+
+test('o teste guarda quantas séries e viradas foram usadas', () => {
+  const r = simulate(80);
+  assert.equal(r.trials, r.curve.reduce((a, c) => a + c.trials, 0));
+  assert.ok(r.reversals >= 0);
+  assert.ok(r.finishedAt);
 });
 
 /* --------------------------- motor da sessão ---------------------------- */
