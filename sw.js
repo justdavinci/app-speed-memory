@@ -38,16 +38,29 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Cache primeiro (o app é estático); a rede só entra quando falta no cache.
+// Responde do cache na hora e busca a versão nova em segundo plano, que fica
+// valendo na próxima abertura. Cache puro deixaria quem já usa o app preso na
+// versão antiga a cada atualização; rede pura tiraria o funcionamento offline.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
 
-  event.respondWith(
-    caches.match(request).then((hit) => hit || fetch(request).then((response) => {
-      const copy = response.clone();
-      caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
-      return response;
-    }).catch(() => caches.match('./index.html'))),
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(request);
+
+    const fromNetwork = fetch(request)
+      .then((response) => {
+        if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+        return response;
+      })
+      .catch(() => null);
+
+    // Com cache, a atualização segue sozinha; sem cache, espera a rede.
+    if (cached) {
+      event.waitUntil(fromNetwork);
+      return cached;
+    }
+    return (await fromNetwork) || (await cache.match('./index.html'));
+  })());
 });
