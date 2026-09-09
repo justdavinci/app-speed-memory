@@ -1,6 +1,6 @@
 // Service worker: cache do "app shell" para funcionar offline.
 // A versão no nome do cache invalida tudo quando os arquivos mudam.
-const CACHE = 'piscamemory-v1';
+const CACHE = 'piscamemory-v2';
 
 const SHELL = [
   './',
@@ -15,6 +15,26 @@ const SHELL = [
   './assets/js/charts.js',
   './assets/js/perception.js',
   './assets/js/adaptive.js',
+  './assets/js/tryhard/config.js',
+  './assets/js/tryhard/rng.js',
+  './assets/js/tryhard/timing.js',
+  './assets/js/tryhard/difficulty.js',
+  './assets/js/tryhard/metrics.js',
+  './assets/js/tryhard/stimuli.js',
+  './assets/js/tryhard/symbols.js',
+  './assets/js/tryhard/store.js',
+  './assets/js/tryhard/runner.js',
+  './assets/js/tryhard/view.js',
+  './assets/js/tryhard/ui.js',
+  './assets/js/tryhard/modules/index.js',
+  './assets/js/tryhard/modules/partialReport.js',
+  './assets/js/tryhard/modules/maskResistance.js',
+  './assets/js/tryhard/modules/peripheralMatrix.js',
+  './assets/js/tryhard/modules/iconicReadout.js',
+  './assets/js/tryhard/modules/peripheralFixation.js',
+  './assets/js/tryhard/modules/abstractFlash.js',
+  './assets/js/tryhard/modules/visualThreshold.js',
+  './assets/js/tryhard/modules/benchmark.js',
   './assets/js/generators/digits.js',
   './assets/js/generators/words.js',
   './assets/js/generators/sentences.js',

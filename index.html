@@ -241,6 +241,27 @@
         </div>
       </section>
 
+      <!-- ============================ TRY HARD =========================== -->
+      <section class="view" id="view-tryhard" aria-label="Try Hard" hidden>
+        <div class="th-hero">
+          <p class="th-hero__kicker">⚡ Treino avançado</p>
+          <h2 class="th-hero__title">TRY HARD</h2>
+          <p class="th-hero__sub">Treine no limite da sua percepção.</p>
+        </div>
+
+        <div class="chips" role="tablist" aria-label="Seções do Try Hard">
+          <button class="chip is-active" data-th-tab="today" role="tab" aria-selected="true">Treino</button>
+          <button class="chip" data-th-tab="modules" role="tab" aria-selected="false">Módulos</button>
+          <button class="chip" data-th-tab="progress" role="tab" aria-selected="false">Progresso</button>
+          <button class="chip" data-th-tab="config" role="tab" aria-selected="false">Config</button>
+        </div>
+
+        <div class="th-panel" id="th-panel-today"></div>
+        <div class="th-panel" id="th-panel-modules" hidden></div>
+        <div class="th-panel" id="th-panel-progress" hidden></div>
+        <div class="th-panel" id="th-panel-config" hidden></div>
+      </section>
+
       <!-- =========================== HISTÓRICO =========================== -->
       <section class="view" id="view-history" aria-label="Histórico" hidden>
         <div class="chips" role="tablist" aria-label="Filtrar por modo">
@@ -383,6 +404,10 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 13V9M9 2h6" /></svg>
         <span>Teste</span>
       </button>
+      <button class="tab" data-view="tryhard" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z" /></svg>
+        <span>Try Hard</span>
+      </button>
       <button class="tab" data-view="history" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 16V9M12 16v-5M16 16V7" /></svg>
         <span>Histórico</span>
@@ -460,6 +485,44 @@
       <button class="btn btn--primary btn--lg" id="btn-next">Próxima série</button>
     </div>
   </div>
+
+  <!-- ====================== SESSÃO DO TRY HARD ======================== -->
+  <div class="th-play" id="th-play" hidden aria-live="polite">
+    <div class="th-play__bar">
+      <button class="icon-btn" id="th-quit" aria-label="Encerrar treino">✕</button>
+      <div class="th-play__session" id="th-session-bar" hidden></div>
+      <button class="icon-btn" id="th-pause" aria-label="Pausar">❚❚</button>
+    </div>
+
+    <div class="th-play__head">
+      <span class="th-play__module" id="th-module-name"></span>
+      <span class="th-play__position" id="th-position" hidden></span>
+      <span class="th-play__counter" id="th-counter"></span>
+    </div>
+    <div class="th-progress" id="th-bar"></div>
+    <p class="th-metrics" id="th-metrics" hidden></p>
+
+    <div class="th-stage" id="th-stage" data-stage="idle">
+      <div class="th-center" id="th-center"></div>
+      <div class="th-layer" id="th-stimulus" hidden></div>
+      <p class="th-prompt" id="th-prompt"></p>
+      <div class="th-response" id="th-response"></div>
+      <div class="th-feedback" id="th-feedback" hidden></div>
+      <div class="th-summary" id="th-summary" hidden></div>
+    </div>
+
+    <div class="th-paused" id="th-paused" hidden>
+      <div class="th-paused__panel">
+        <h2 class="th-big">Pausado</h2>
+        <p class="th-hint">A tentativa interrompida foi descartada. Ao voltar, começa uma nova.</p>
+        <button class="btn btn--primary btn--lg" id="th-resume">Retomar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="th-sheet" id="th-sheet" hidden></div>
+  <div class="th-onboarding" id="th-onboarding" hidden></div>
+  <div class="th-result" id="th-result" hidden></div>
 
   <div class="toast" id="toast" hidden></div>
 

@@ -19,6 +19,7 @@ import {
   TEST, createStaircase, currentCount, currentExposure, finishTest, nextInterval, recordTrial,
 } from './adaptive.js';
 import { barChart, lineChart } from './charts.js';
+import { initTryHard, onEnterTryHard, tryHardStore } from './tryhard/ui.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -231,6 +232,7 @@ async function keepAwake(on) {
 const VIEW_TITLES = {
   train: ['Treinar', 'Escolha o modo e a dificuldade'],
   test: ['Teste', 'Descubra a sua velocidade de processamento'],
+  tryhard: ['Try Hard', 'Treino avançado de percepção'],
   history: ['Histórico', 'Sua evolução ao longo do tempo'],
   results: ['Resultado', 'Como foi a sua sessão'],
   'test-result': ['Resultado do teste', 'A sua velocidade estimada'],
@@ -239,7 +241,7 @@ const VIEW_TITLES = {
 
 function showView(view) {
   state.view = view;
-  for (const name of ['train', 'test', 'history', 'results', 'test-result', 'settings']) {
+  for (const name of ['train', 'test', 'tryhard', 'history', 'results', 'test-result', 'settings']) {
     $(`#view-${name}`).hidden = name !== view;
   }
   $$('.tab').forEach((tab) => {
@@ -253,6 +255,7 @@ function showView(view) {
   $('#main').scrollTop = 0;
   if (view === 'history') renderHistory();
   if (view === 'test') renderTestIntro();
+  if (view === 'tryhard') onEnterTryHard();
 }
 
 /* ========================= configuração do treino ======================= */
@@ -1057,6 +1060,8 @@ function exportData() {
     version: 1,
     exportedAt: new Date().toISOString(),
     sessions: state.history,
+    tests: state.tests,
+    tryhard: tryHardStore.exportAll(),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -1075,6 +1080,7 @@ async function handleImport(file) {
     const data = JSON.parse(await file.text());
     const sessions = Array.isArray(data) ? data : data.sessions;
     state.history = importHistory(sessions, false);
+    if (data.tryhard) tryHardStore.importAll(data.tryhard);
     renderHistory();
     renderTrain();
     toast('Histórico importado.');
@@ -1372,6 +1378,12 @@ function init() {
   renderTrain();
   showView('train');
   measureFrame();
+
+  initTryHard({
+    toast,
+    confirm: confirmDialog,
+    setChromeHidden: (hidden) => { $('#tabbar').hidden = hidden; },
+  });
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
