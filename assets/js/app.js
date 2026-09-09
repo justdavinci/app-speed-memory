@@ -5,13 +5,14 @@ import { chunk, clamp, esc, fmtDateTime, fmtDuration, pct } from './util.js';
 import {
   DEFAULT_SETTINGS, INTERVAL_MAX_MS, LIMITS, MODES, MODE_LABELS, MODE_UNITS,
   addSession, addTest, bestTest, clearHistory, exposureOf, importHistory, loadHistory,
-  loadSettings, loadTests, saveSettings, statsFor,
+  loadSettings, loadTests, levelsByMode, saveSettings, statsFor, testLevels,
 } from './storage.js';
 import {
   advance, createSession, currentRound, finishSession, isLastRound, nextIntervalMs, submitRound,
 } from './engine.js';
 import {
-  EXPOSURE_STEPS, PERCEPTION_BANDS, bandFor, formatExposure, stepIndexFor,
+  BAND_SCALES, EXPOSURE_STEPS, classify, formatExposure, formatLevel, levelOf,
+  scaleForMode, stepIndexFor,
 } from './perception.js';
 import {
   TEST, createStaircase, currentExposure, finishTest, nextInterval, recordTrial,
@@ -29,6 +30,7 @@ const state = {
   tests: loadTests(),
   testMode: 'digits',
   testResult: null,
+  scaleView: 'digits',   // régua exibida na tabela do histórico
   view: 'train',
   filter: 'all',
   chartIndex: -1,
@@ -308,9 +310,12 @@ function renderTrain() {
   $('#in-exposure').value = stepIndex;
   $('#out-exposure').textContent = formatExposure(exposure);
 
-  const band = bandFor(exposure);
+  const { band, basisMs, scale } = classify(mode, exposure, c.count);
+  const basisText = scale.perItem
+    ? ` — ${formatExposure(basisMs)} por palavra`
+    : '';
   $('#exposure-band').innerHTML =
-    `<strong>${esc(band.name)}</strong> · ${esc(band.range)}<span>${esc(band.text)}</span>`;
+    `<strong>${esc(band.name)}</strong> · ${esc(band.range)}${esc(basisText)}<span>${esc(band.text)}</span>`;
 
   // Nenhuma tela mostra algo por menos de um quadro: avisar quando for o caso.
   const frame = state.frameMs;
@@ -678,28 +683,58 @@ function renderTestIntro() {
     `Sua tela mostra um quadro a cada ${frame.toFixed(0)} ms (~${Math.round(1000 / frame)} Hz). `
     + 'O teste não desce abaixo disso, porque tempos menores seriam idênticos na prática.';
 
-  const mine = state.tests.filter((t) => t.mode === state.testMode);
   const card = $('#test-last-card');
-  card.hidden = !mine.length;
-  if (!mine.length) return;
+  card.hidden = !state.tests.length;
+  if (!state.tests.length) return;
 
-  const last = mine[mine.length - 1];
+  const levels = testLevels(state.tests);
+  $('#test-levels').innerHTML = [
+    levelCard('Dígitos', levels.digits && asLevelEntry(levels.digits), 'faça o teste com dígitos'),
+    levelCard('Palavras', levels.words && asLevelEntry(levels.words), 'faça o teste com palavras'),
+    `<div class="level-card level-card--average">
+        <span class="level-card__kind">Média dos dois tipos</span>
+        <span class="level-card__value">${esc(formatLevel(levels.average))}<small> / 7</small></span>
+        <span class="level-card__note">${levels.average === null
+          ? 'aparece quando você tiver feito os dois testes'
+          : `média entre dígitos (${levels.digits.level}) e palavras (${levels.words.level})`}</span>
+      </div>`,
+  ].join('');
+
+  $('#test-average-hint').textContent = levels.average === null
+    ? 'Os dois testes medem coisas diferentes: dígitos pelo tempo total da série, palavras pelo tempo por palavra.'
+    : 'Cada tipo tem a sua régua — a média só faz sentido porque os dois níveis já estão na mesma escala de 1 a 7.';
+
+  const mine = state.tests.filter((t) => t.mode === state.testMode);
   const best = bestTest(state.tests, state.testMode);
-  $('#test-last-level').innerHTML = levelMarkup(last);
-  $('#test-history').innerHTML = mine.slice().reverse().slice(0, 10).map((t) => `
+  $('#test-history').innerHTML = mine.length ? mine.slice().reverse().slice(0, 10).map((t) => `
       <article class="history-item">
         <div class="history-item__main">
           <div class="history-item__title">Nível ${t.level} · ${esc(t.band.name)}</div>
           <div class="history-item__meta">${fmtDateTime(t.finishedAt)} · ${MODE_LABELS[t.mode]}${t.mode === 'words' && t.ordered === false ? ' (ordem livre)' : ''} · ${t.trials} séries · limiar ${esc(formatExposure(t.thresholdMs))}${t.id === best.id ? ' · melhor' : ''}</div>
         </div>
-        <div class="history-item__score">${esc(formatExposure(t.thresholdMs))}</div>
-      </article>`).join('');
+        <div class="history-item__score">${t.level}</div>
+      </article>`).join('') : `<p class="empty">Nenhum teste de ${esc(MODE_LABELS[state.testMode].toLowerCase())} ainda.</p>`;
+}
+
+/** Um resultado de teste no formato dos cartões de nível. */
+function asLevelEntry(result) {
+  return {
+    level: result.level,
+    levels: result.levels ?? 7,
+    band: result.band,
+    basisMs: result.basisMs ?? result.thresholdMs,
+    scale: BAND_SCALES[result.scaleId] || scaleForMode(result.mode),
+  };
 }
 
 function levelMarkup(result) {
+  const scale = BAND_SCALES[result.scaleId] || scaleForMode(result.mode);
+  const detalhe = scale.perItem
+    ? `${formatExposure(result.thresholdMs)} para ${result.count} palavras — ${formatExposure(result.basisMs)} por palavra`
+    : `limiar ${formatExposure(result.thresholdMs)}`;
   return `<span class="level__value">${result.level}</span>
     <span class="level__name">${esc(result.band.name)}</span>
-    <span class="level__note">nível ${result.level} de ${result.levels} · limiar ${esc(formatExposure(result.thresholdMs))} · ${esc(result.band.range)}</span>`;
+    <span class="level__note">nível ${result.level} de ${result.levels} na régua de ${esc(scale.label.toLowerCase())} · ${esc(detalhe)}</span>`;
 }
 
 function startTest() {
@@ -751,6 +786,7 @@ function endTest() {
 function renderTestResult(result) {
   $('#test-result-level').innerHTML = levelMarkup(result);
 
+  $('#test-result-level').classList.add('level--big');
   const notes = {
     convergiu: `Estimativa a partir de ${result.reversals} viradas da escada — o teste se estabilizou.`,
     piso: `Você acertou até o degrau mais rápido possível neste aparelho (${formatExposure(result.floorMs)}). O seu limiar pode ser menor do que a tela consegue mostrar.`,
@@ -761,10 +797,11 @@ function renderTestResult(result) {
 
   const previous = state.tests.filter((t) => t.mode === result.mode && t.id !== result.id);
   const best = previous.length ? Math.min(...previous.map((t) => t.thresholdMs)) : null;
+  const scale = BAND_SCALES[result.scaleId] || scaleForMode(result.mode);
   const tiles = [
-    tile(formatExposure(result.thresholdMs), 'limiar estimado'),
+    tile(formatExposure(result.thresholdMs), 'limiar da série'),
+    tile(formatExposure(result.basisMs), scale.unitShort === 'total' ? 'tempo total' : 'por palavra'),
     tile(String(result.trials), 'séries usadas'),
-    tile(MODE_LABELS[result.mode], 'estímulo'),
     tile(best === null ? 'primeiro' : formatExposure(best), best === null ? 'teste' : 'melhor anterior'),
   ];
   $('#test-result-tiles').innerHTML = tiles.join('');
@@ -779,14 +816,14 @@ function renderTestResult(result) {
       </div>`;
   }).join('');
 
-  $('#test-band-table').innerHTML = PERCEPTION_BANDS.map((band) => {
+  $('#test-band-table').innerHTML = scale.bands.map((band) => {
     const current = band.id === result.band.id;
     return `<div class="band-row${current ? ' is-current' : ''}">
         <div class="band-row__range">${esc(band.range)}</div>
         <div>
-          <div class="band-row__name">Nível ${PERCEPTION_BANDS.length - PERCEPTION_BANDS.indexOf(band)} · ${esc(band.name)}</div>
+          <div class="band-row__name">Nível ${levelOf(scale, band)} · ${esc(band.name)}</div>
           <div class="band-row__text">${esc(band.text)}</div>
-          ${current ? `<span class="band-row__badge">seu resultado — ${esc(formatExposure(result.thresholdMs))}</span>` : ''}
+          ${current ? `<span class="band-row__badge">seu resultado — ${esc(formatExposure(result.basisMs))} ${esc(scale.unitShort)}</span>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -868,7 +905,7 @@ function renderHistory() {
     trendTile,
   ].join('');
 
-  renderBandTable(stats.level);
+  renderLevels();
 
   const recent = list.slice(-30);
   state.chartIndex = clamp(state.chartIndex, -1, recent.length - 1);
@@ -890,25 +927,66 @@ function renderHistory() {
     : '<p class="empty">Nenhuma sessão registrada ainda.</p>';
 }
 
-/** Tabela de faixas, com a faixa alcançada em destaque. */
-function renderBandTable(level) {
-  $('#level-headline').innerHTML = level
-    ? `<span class="level__value">${esc(formatExposure(level.exposureMs))}</span>
-       <span class="level__name">${esc(level.band.name)}</span>
-       <span class="level__note">nível alcançado · ${esc(level.band.range)}</span>`
-    : `<span class="level__value">—</span>
-       <span class="level__name">Sem nível ainda</span>
-       <span class="level__note">acerte uma série inteira para marcar a sua faixa</span>`;
+/** Cartão de nível de um tipo de estímulo. */
+function levelCard(kind, entry, note) {
+  if (!entry) {
+    return `<div class="level-card level-card--empty">
+        <span class="level-card__kind">${esc(kind)}</span>
+        <span class="level-card__value">—</span>
+        <span class="level-card__name">Sem nível ainda</span>
+        <span class="level-card__note">${esc(note)}</span>
+      </div>`;
+  }
+  return `<div class="level-card">
+      <span class="level-card__kind">${esc(kind)}</span>
+      <span class="level-card__value">${entry.level}<small> / ${entry.levels}</small></span>
+      <span class="level-card__name">${esc(entry.band.name)}</span>
+      <span class="level-card__note">${esc(formatExposure(entry.basisMs))} ${esc(entry.scale.unitShort)}</span>
+    </div>`;
+}
 
-  $('#band-table').innerHTML = PERCEPTION_BANDS.map((band) => {
-    const current = level && level.band.id === band.id;
+/** Níveis por tipo de estímulo, mais a média das duas famílias. */
+function renderLevels() {
+  const levels = levelsByMode(state.history);
+
+  const cards = [
+    levelCard('Dígitos', levels.digits, 'acerte uma série inteira de dígitos'),
+    levelCard('Palavras', levels.words, 'acerte uma série inteira de palavras'),
+  ];
+  if (levels.sentence) cards.push(levelCard('Frases', levels.sentence, ''));
+
+  cards.push(`<div class="level-card level-card--average">
+      <span class="level-card__kind">Média dos dois tipos</span>
+      <span class="level-card__value">${esc(formatLevel(levels.average))}<small> / 7</small></span>
+      <span class="level-card__note">${levels.average === null
+        ? 'aparece quando houver nível nos dois tipos, dígitos e palavras'
+        : `média entre dígitos (${levels.digits.level}) e palavras (${levels.words.level})${levels.sentence ? ' — frases ficam de fora, por serem outra tarefa' : ''}`}</span>
+    </div>`);
+
+  $('#levels-by-mode').innerHTML = cards.join('');
+
+  const scale = BAND_SCALES[state.scaleView];
+  $$('[data-scale]').forEach((btn) => {
+    btn.setAttribute('aria-checked', String(btn.dataset.scale === state.scaleView));
+  });
+  $('#scale-hint').textContent = scale.perItem
+    ? 'Medida por palavra: o tempo total dividido pela quantidade de palavras da série.'
+    : 'Medida pelo tempo total de exibição da sequência.';
+
+  renderBandTable(scale, state.scaleView === 'digits' ? levels.digits : levels.words);
+}
+
+/** Tabela de faixas de uma régua, com a faixa alcançada em destaque. */
+function renderBandTable(scale, entry) {
+  $('#band-table').innerHTML = scale.bands.map((band) => {
+    const current = entry && entry.band.id === band.id;
     const badge = current
-      ? `<span class="band-row__badge">seu nível — ${esc(formatExposure(level.exposureMs))}</span>`
+      ? `<span class="band-row__badge">seu nível — ${esc(formatExposure(entry.basisMs))} ${esc(scale.unitShort)}</span>`
       : '';
     return `<div class="band-row${current ? ' is-current' : ''}">
         <div class="band-row__range">${esc(band.range)}</div>
         <div>
-          <div class="band-row__name">${esc(band.name)}</div>
+          <div class="band-row__name">Nível ${levelOf(scale, band)} · ${esc(band.name)}</div>
           <div class="band-row__text">${esc(band.text)}</div>
           ${badge}
         </div>
@@ -1160,6 +1238,9 @@ function bindEvents() {
     chip.addEventListener('click', () => {
       state.filter = chip.dataset.filter;
       state.chartIndex = -1;
+      if (chip.dataset.filter !== 'all') {
+        state.scaleView = scaleForMode(chip.dataset.filter).id;
+      }
       $$('.chip').forEach((c) => {
         const active = c === chip;
         c.classList.toggle('is-active', active);
@@ -1174,6 +1255,13 @@ function bindEvents() {
     if (!hit) return;
     state.chartIndex = Number(hit.dataset.i);
     renderHistory();
+  });
+
+  $$('[data-scale]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.scaleView = btn.dataset.scale;
+      renderLevels();
+    });
   });
 
   $('#btn-export').addEventListener('click', exportData);

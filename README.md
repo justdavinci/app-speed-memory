@@ -68,25 +68,58 @@ O valor medido é a melhor aproximação possível de dentro do navegador: ele
 conta os quadros entre a pintura e a remoção do estímulo, sem acesso ao
 hardware da tela.
 
-## Classificação por tempo de exposição
+## Classificação: duas réguas, uma para cada tipo de estímulo
 
-As estatísticas mostram o seu **nível**: a menor exposição em que você já
-acertou uma série inteira. Acertar tudo prova que aquele tempo bastou; uma
-sessão só com acertos parciais, não.
+Dígitos e palavras não se comparam na mesma régua. Ver um dígito é
+reconhecimento de caractere; ler uma palavra exige acesso ao léxico e custa
+bem mais tempo. Por isso há **duas escalas de 7 níveis**, cada uma medindo o
+que faz sentido para o seu estímulo — e uma **média** entre elas.
 
-| Exposição | O que pode acontecer |
-| --- | --- |
-| 5–10 ms | Pode haver processamento visual, mas identificação consciente confiável é difícil |
-| 10–20 ms | Um dígito ou estímulo simples pode às vezes ser identificado |
-| 20–50 ms | Já pode ser suficiente para reconhecer vários caracteres em condições ideais |
-| 50–100 ms | Faixa da duração clássica dos experimentos de memória icônica (~50 ms): cerca de 4 a 5 caracteres relatados em média |
-| 100–200 ms | Uma sequência curta já pode ser codificada com bastante eficiência |
-| 200–500 ms | A limitação começa a ser muito mais de memória e atenção do que de percepção |
-| acima de 500 ms | Fora da faixa da tabela: o desafio passa a ser inteiramente de memória |
+O seu nível num tipo é a **menor exposição em que você já acertou uma série
+inteira** daquele tipo. Acertar tudo prova que o tempo bastou; acerto parcial
+não prova.
 
-São referências da literatura de percepção visual e memória icônica, para
-situar o treino — valores típicos em condições ideais, não um diagnóstico. A
-última linha é uma extensão para os tempos acima da tabela original.
+### Dígitos — pelo tempo total da série
+
+| Exposição total | Nível | O que pode acontecer |
+| --- | --- | --- |
+| 5–10 ms | 7 | Pode haver processamento visual, mas identificação consciente confiável é difícil |
+| 10–20 ms | 6 | Um dígito ou estímulo simples pode às vezes ser identificado |
+| 20–50 ms | 5 | Já pode ser suficiente para reconhecer vários caracteres em condições ideais |
+| 50–100 ms | 4 | Faixa da duração clássica dos experimentos de memória icônica (~50 ms): cerca de 4 a 5 caracteres relatados em média |
+| 100–200 ms | 3 | Uma sequência curta já pode ser codificada com bastante eficiência |
+| 200–500 ms | 2 | A limitação começa a ser muito mais de memória e atenção do que de percepção |
+| acima de 500 ms | 1 | O desafio passa a ser inteiramente de memória |
+
+### Palavras — pelo tempo por palavra
+
+| Tempo por palavra | Nível | O que pode acontecer |
+| --- | --- | --- |
+| até 35 ms | 7 | Mesmo uma palavra isolada só é identificada em condições ideais; captar várias é improvável |
+| 35–70 ms | 6 | Uma ou outra palavra pode ser reconhecida, mas a maior parte escapa antes de virar memória |
+| 70–120 ms | 5 | Mais rápido do que a compreensão costuma acompanhar em apresentação serial |
+| 120–200 ms | 4 | Perto do limite de leitores rápidos e treinados (~300 a 500 palavras por minuto) |
+| 200–300 ms | 3 | Faixa da fixação média na leitura silenciosa (~200 a 300 palavras por minuto) |
+| 300–500 ms | 2 | Tempo de sobra para ler cada palavra e começar a organizar a memorização |
+| acima de 500 ms | 1 | A leitura deixou de ser o gargalo: o desafio é memória e estratégia |
+
+**De onde vêm.** A tabela dos dígitos é a da literatura de percepção visual e
+memória icônica (a última linha é uma extensão para tempos acima dela). A das
+palavras é derivada da pesquisa em leitura: fixação média de 200 a 250 ms por
+palavra na leitura silenciosa, leitura veloz treinada por volta de 120 a 200 ms
+por palavra, compreensão desabando abaixo de ~100 ms por palavra em
+apresentação serial, e reconhecimento de palavra isolada com máscara possível
+por volta de 30 a 50 ms. São referências aproximadas em condições ideais, não
+um diagnóstico.
+
+**Por que normalizar por palavra.** Assim uma série de 3 palavras e outra de 10
+ficam comparáveis: o que conta é quanto tempo cada palavra teve. Frases usam a
+mesma régua verbal, por serem o mesmo tipo de processamento.
+
+**A média** combina o nível de dígitos com o de palavras — os dois tipos de
+teste. Ela só aparece quando existem os dois, e frases ficam de fora por serem
+outra tarefa (o contexto da frase ajuda a memorizar, então o número não seria
+comparável).
 
 ## Teste de velocidade de processamento
 
@@ -104,6 +137,9 @@ limiar.
   antes (8 viradas de direção).
 - **Carga fixa**: 4 dígitos ou 3 palavras. Se a quantidade mudasse junto com o
   tempo, não daria para saber qual das duas coisas o resultado mediu.
+- **Parâmetros por tipo**: o teste de palavras começa mais devagar (900 ms
+  contra 500 ms) e tem teto mais alto (3 s contra 2 s), porque ler custa mais
+  que ver.
 - **Sem contagem** e com espera sorteada entre 1,5 s e 4 s, para você não pegar
   o ritmo e antecipar o estímulo.
 - Passos largos no começo e estreitos depois das duas primeiras viradas, para
@@ -113,9 +149,9 @@ limiar.
 - A escada nunca desce abaixo de **um quadro da sua tela**: ali os degraus
   seriam indistinguíveis e o teste mediria ruído.
 
-**O resultado** coloca você em um dos 7 níveis (um para cada faixa da tabela de
-classificação), mostra o limiar estimado e a **precisão média por tempo de
-exibição** — a queda de acerto conforme o tempo encurta. Ele também sinaliza
+**O resultado** coloca você em um dos 7 níveis **da régua daquele estímulo** —
+o teste de dígitos usa o tempo total, o de palavras usa o tempo por palavra —,
+mostra o limiar estimado e a **precisão média por tempo de exibição** — a queda de acerto conforme o tempo encurta. Ele também sinaliza
 quando o número não é confiável: `piso` (você acertou até o degrau mais rápido
 do aparelho), `teto` (não acertou nem no tempo mais longo) ou `parcial` (as
 séries acabaram antes de estabilizar).
@@ -145,13 +181,15 @@ offline depois da primeira visita.
 npm test
 ```
 
-66 testes sem dependências cobrindo as partes puras: geradores, concordância
+78 testes sem dependências cobrindo as partes puras: geradores, concordância
 das frases, correção das respostas (com e sem ordem obrigatória), motor da
 sessão, escala de exposição, faixas perceptuais, sorteio do intervalo, migração
 de ajustes antigos, estatísticas do histórico e a escada do teste adaptativo —
 esta última verificada com uma pessoa simulada, conferindo que o teto de 30
 séries é respeitado, que a escada não desce abaixo do piso do aparelho e que
-limiares diferentes produzem estimativas separadas. Entre eles, a garantia de que a frase gerada tem
+limiares diferentes produzem estimativas separadas. As duas réguas também são
+testadas: cobertura das faixas, normalização por palavra e a média que só
+existe quando há nível nos dois tipos. Entre eles, a garantia de que a frase gerada tem
 **exatamente** o número de palavras pedido (verificado de 3 a 30 palavras) e de
 que artigos e adjetivos concordam em gênero.
 

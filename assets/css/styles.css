@@ -474,6 +474,30 @@ button { cursor: pointer; }
 .curve__fill.is-high { background: var(--ok); }
 .curve__value { font-variant-numeric: tabular-nums; color: var(--muted); }
 
+/* Níveis lado a lado, um por tipo de estímulo, mais a média. */
+.levels-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+
+.level-card {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-elev-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.level-card--average {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, var(--bg-elev-2)), var(--bg-elev-2));
+  grid-column: 1 / -1;
+}
+.level-card--empty { opacity: .7; }
+.level-card__kind { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.level-card__value { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.level-card__value small { font-size: .8rem; font-weight: 600; color: var(--muted); }
+.level-card__name { font-size: .84rem; font-weight: 650; }
+.level-card__note { font-size: .74rem; color: var(--muted); }
+
 /* Tabela de classificação por exposição. */
 .bands { display: flex; flex-direction: column; gap: 6px; }
 

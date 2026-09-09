@@ -195,8 +195,10 @@
         </div>
 
         <div class="card" id="test-last-card" hidden>
-          <h2 class="card__title">Seu último teste</h2>
-          <div class="level" id="test-last-level"></div>
+          <h2 class="card__title">Seus níveis</h2>
+          <div class="levels-grid" id="test-levels"></div>
+          <p class="field__hint" id="test-average-hint"></p>
+          <h3 class="section-title">Testes anteriores</h3>
           <div id="test-history" class="history-list"></div>
         </div>
 
@@ -261,16 +263,23 @@
         </div>
 
         <div class="card">
-          <h2 class="card__title">Classificação por tempo de exposição</h2>
-          <div class="level" id="level-headline"></div>
+          <h2 class="card__title">Nível por tipo de estímulo</h2>
           <p class="prose">
             O seu nível é a <strong>menor exposição em que você já acertou uma série
-            inteira</strong> — acertar tudo prova que aquele tempo bastou.
+            inteira</strong> — acertar tudo prova que aquele tempo bastou. Dígitos e
+            palavras têm réguas separadas: ler exige acesso ao léxico, ver um dígito não.
           </p>
+          <div class="levels-grid" id="levels-by-mode"></div>
+
+          <div class="segmented" role="radiogroup" aria-label="Régua exibida">
+            <button class="segmented__opt" data-scale="digits" role="radio" aria-checked="true">Régua dos dígitos</button>
+            <button class="segmented__opt" data-scale="words" role="radio" aria-checked="false">Régua das palavras</button>
+          </div>
+          <p class="field__hint" id="scale-hint"></p>
           <div class="bands" id="band-table"></div>
           <p class="chart__caption">
-            Referências da literatura de percepção visual e memória icônica, para situar
-            o treino. Valores típicos em condições ideais, não um diagnóstico.
+            Referências aproximadas, em condições ideais, para situar o treino — não um
+            diagnóstico.
           </p>
         </div>
 

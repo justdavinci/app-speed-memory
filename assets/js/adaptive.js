@@ -8,15 +8,17 @@
 // A carga (quantidade de itens) é fixa de propósito: se ela variasse junto com
 // o tempo, não daria para saber qual das duas coisas o resultado mediu.
 
-import { EXPOSURE_STEPS, bandFor, bandLevel } from './perception.js';
+import { EXPOSURE_STEPS, classify } from './perception.js';
 import { clamp, randInt } from './util.js';
 
 export const TEST = {
   maxTrials: 30,          // teto pedido: no máximo 30 séries
   stopReversals: 8,       // ou encerra antes, quando a escada já se estabilizou
   thresholdReversals: 6,  // reversões usadas na média final
-  startMs: 500,
-  ceilingMs: 2000,        // acima disso não é mais teste de percepção
+  // Ler três palavras custa mais que ver quatro dígitos: cada estímulo começa
+  // e termina em tempos próprios, senão o teste gastaria séries à toa.
+  startMs: { digits: 500, words: 900 },
+  ceilingMs: { digits: 2000, words: 3000 },
   itemCount: { digits: 4, words: 3 },
   intervalMinMs: 1500,    // espera sorteada e sem contagem: nada de ritmo previsível
   intervalMaxMs: 4000,
@@ -32,15 +34,19 @@ export const TEST = {
  *   e a escada mediria ruído.
  */
 export function createStaircase({ mode, floorMs = 5 } = {}) {
-  const floor = clamp(floorMs, EXPOSURE_STEPS[0], TEST.ceilingMs);
-  const steps = EXPOSURE_STEPS.filter((ms) => ms >= floor && ms <= TEST.ceilingMs);
+  const ceiling = TEST.ceilingMs[mode] ?? TEST.ceilingMs.digits;
+  const start = TEST.startMs[mode] ?? TEST.startMs.digits;
+  const floor = clamp(floorMs, EXPOSURE_STEPS[0], ceiling);
+  const steps = EXPOSURE_STEPS.filter((ms) => ms >= floor && ms <= ceiling);
   if (!steps.length) steps.push(floor);
 
-  let index = steps.findIndex((ms) => ms >= TEST.startMs);
+  let index = steps.findIndex((ms) => ms >= start);
   if (index < 0) index = steps.length - 1;
 
   return {
     mode,
+    count: TEST.itemCount[mode] ?? TEST.itemCount.digits,
+    ceilingMs: ceiling,
     steps,
     index,
     floorMs: steps[0],
@@ -150,18 +156,23 @@ export function finishTest(st) {
   }
 
   const rounded = Math.round(thresholdMs);
-  const band = bandFor(rounded);
+  // Cada estímulo tem a sua régua: dígitos pelo tempo total, palavras por palavra.
+  const { band, level, levels, basisMs, scale } = classify(st.mode, rounded, st.count);
 
   return {
     mode: st.mode,
+    count: st.count,
     thresholdMs: rounded,
+    basisMs: Math.round(basisMs),
+    scaleId: scale.id,
     band,
-    level: bandLevel(band),
-    levels: 7,
+    level,
+    levels,
     quality,
     trials: st.trials.length,
     reversals: st.reversals.length,
     floorMs: st.floorMs,
+    ceilingMs: st.ceilingMs,
     curve: accuracyByExposure(st.trials),
     finishedAt: new Date().toISOString(),
   };

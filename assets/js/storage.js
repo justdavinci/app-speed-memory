@@ -1,6 +1,6 @@
 // Persistência local (localStorage) de preferências e histórico.
 import { avg, uid } from './util.js';
-import { MAX_EXPOSURE_MS, MIN_EXPOSURE_MS, bandFor } from './perception.js';
+import { MAX_EXPOSURE_MS, MIN_EXPOSURE_MS, averageLevel, classify } from './perception.js';
 
 const SETTINGS_KEY = 'speedmemory.settings.v1';
 const HISTORY_KEY = 'speedmemory.history.v1';
@@ -186,6 +186,17 @@ export function bestTest(tests, mode) {
   return list.reduce((a, b) => (b.thresholdMs < a.thresholdMs ? b : a));
 }
 
+/** Último teste de cada tipo e a média dos dois níveis. */
+export function testLevels(tests) {
+  const latest = (mode) => {
+    const list = tests.filter((t) => t.mode === mode);
+    return list.length ? list[list.length - 1] : null;
+  };
+  const digits = latest('digits');
+  const words = latest('words');
+  return { digits, words, average: averageLevel([digits, words]) };
+}
+
 /** Importa um histórico exportado; `replace` troca tudo, senão mescla por id. */
 export function importHistory(list, replace = false) {
   if (!Array.isArray(list)) throw new Error('Arquivo inválido: esperava uma lista de sessões.');
@@ -242,18 +253,47 @@ export function statsFor(history, mode) {
 }
 
 /**
- * Nível perceptual alcançado: a menor exposição em que a pessoa já acertou
- * uma série inteira. Uma série perfeita prova que o tempo foi suficiente;
- * uma sessão só com acertos parciais, não.
+ * Nível perceptual alcançado num modo: a menor exposição em que a pessoa já
+ * acertou uma série inteira. Uma série perfeita prova que o tempo foi
+ * suficiente; uma sessão só com acertos parciais, não.
  *
- * @returns {{exposureMs:number, band:object, session:object}|null}
+ * A comparação é feita na régua do modo — total para dígitos, por palavra para
+ * estímulos verbais —, e é por isso que ela precisa do modo, não só do tempo.
+ *
+ * @param {Array} history sessões (de um único modo, ou mistas com `mode` dado)
+ * @param {string} [mode] modo a considerar; sem ele, usa o de cada sessão
+ * @returns {{exposureMs:number, basisMs:number, band:object, level:number, levels:number, session:object}|null}
  */
-export function levelFrom(history) {
-  const proven = history.filter((s) => s.totals?.perfectSeries > 0 && exposureOf(s.config) > 0);
+export function levelFrom(history, mode) {
+  const proven = history.filter((s) => (
+    (!mode || s.mode === mode)
+    && s.totals?.perfectSeries > 0
+    && exposureOf(s.config) > 0
+    && s.config?.count > 0
+  ));
   if (!proven.length) return null;
-  const best = proven.reduce((a, b) => (exposureOf(b.config) < exposureOf(a.config) ? b : a));
-  const exposureMs = exposureOf(best.config);
-  return { exposureMs, band: bandFor(exposureMs), session: best };
+
+  const scored = proven.map((session) => {
+    const exposureMs = exposureOf(session.config);
+    const info = classify(session.mode, exposureMs, session.config.count);
+    return { exposureMs, session, ...info };
+  });
+
+  // "Melhor" é o menor valor na régua do próprio modo.
+  const best = scored.reduce((a, b) => (b.basisMs < a.basisMs ? b : a));
+  return { ...best, basisMs: Math.round(best.basisMs) };
+}
+
+/**
+ * Níveis por tipo de estímulo mais a média das duas famílias.
+ * Frases entram como estímulo verbal, mas fora da média: a média combina os
+ * dois tipos de teste, dígitos e palavras.
+ */
+export function levelsByMode(history) {
+  const digits = levelFrom(history, 'digits');
+  const words = levelFrom(history, 'words');
+  const sentence = levelFrom(history, 'sentence');
+  return { digits, words, sentence, average: averageLevel([digits, words]) };
 }
 
 function structuredCloneSafe(obj) {

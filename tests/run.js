@@ -14,10 +14,13 @@ import {
   advance, createSession, finishSession, nextIntervalMs, submitRound,
 } from '../assets/js/engine.js';
 import {
-  DEFAULT_SETTINGS, exposureOf, importHistory, levelFrom, migrateSettings, statsFor,
+  DEFAULT_SETTINGS, exposureOf, importHistory, levelFrom, levelsByMode, migrateSettings,
+  statsFor, testLevels,
 } from '../assets/js/storage.js';
 import {
-  EXPOSURE_STEPS, MIN_EXPOSURE_MS, PERCEPTION_BANDS, bandFor, formatExposure, stepIndexFor,
+  BAND_SCALES, DIGIT_BANDS, EXPOSURE_STEPS, MIN_EXPOSURE_MS, WORD_BANDS,
+  averageLevel, basisFor, bandIn, classify, formatExposure, formatLevel, levelOf,
+  scaleForMode, stepIndexFor,
 } from '../assets/js/perception.js';
 import {
   TEST, accuracyByExposure, createStaircase, currentExposure, finishTest, nextInterval, recordTrial,
@@ -355,13 +358,13 @@ test('quem acerta tudo termina no piso e é sinalizado', () => {
   const r = simulate(1, 17, () => 0);   // sempre acerta
   assert.equal(r.quality, 'piso');
   assert.equal(r.thresholdMs, r.floorMs);
-  assert.equal(r.level, 7 - PERCEPTION_BANDS.indexOf(bandFor(r.floorMs)));
+  assert.equal(r.level, classify('digits', r.floorMs, 4).level);
 });
 
 test('quem erra tudo termina no teto e é sinalizado', () => {
   const r = simulate(1e9, 17, () => 1); // sempre erra
   assert.equal(r.quality, 'teto');
-  assert.equal(r.thresholdMs, TEST.ceilingMs);
+  assert.equal(r.thresholdMs, TEST.ceilingMs.digits);
   assert.equal(r.level, 1);
 });
 
@@ -375,11 +378,37 @@ test('limiares maiores produzem estimativas maiores', () => {
   assert.ok(lento > rapido * 2, `esperava separação clara, veio ${rapido} vs ${lento}`);
 });
 
+test('cada tipo de teste usa a sua régua e o seu teto', () => {
+  const digitos = createStaircase({ mode: 'digits', floorMs: 17 });
+  const palavras = createStaircase({ mode: 'words', floorMs: 17 });
+  assert.equal(digitos.ceilingMs, TEST.ceilingMs.digits);
+  assert.equal(palavras.ceilingMs, TEST.ceilingMs.words);
+  assert.ok(currentExposure(palavras) > currentExposure(digitos), 'palavras começam mais devagar');
+  assert.equal(digitos.count, 4);
+  assert.equal(palavras.count, 3);
+
+  while (!palavras.done) recordTrial(palavras, { perfect: false, correct: 0, total: 3 });
+  const r = finishTest(palavras);
+  assert.equal(r.scaleId, 'words');
+  assert.equal(r.basisMs, Math.round(r.thresholdMs / 3), 'palavras reportam o tempo por palavra');
+  assert.equal(r.band.id, WORD_BANDS[WORD_BANDS.length - 1].id);
+});
+
+test('o teste de dígitos reporta o tempo total, sem dividir', () => {
+  const st = createStaircase({ mode: 'digits', floorMs: 17 });
+  while (!st.done) recordTrial(st, { perfect: false, correct: 0, total: 4 });
+  const r = finishTest(st);
+  assert.equal(r.scaleId, 'digits');
+  assert.equal(r.basisMs, r.thresholdMs);
+  assert.equal(r.band.id, DIGIT_BANDS[DIGIT_BANDS.length - 1].id);
+});
+
 test('o nível fica dentro da escala de 7 faixas', () => {
   for (const alvo of [20, 60, 150, 400, 1500]) {
     const r = simulate(alvo);
     assert.ok(r.level >= 1 && r.level <= 7, `nível fora da escala: ${r.level}`);
     assert.equal(r.levels, 7);
+    assert.equal(r.count, TEST.itemCount.digits);
   }
 });
 
@@ -466,22 +495,79 @@ test('formatExposure usa ms abaixo de 1 s e segundos acima', () => {
   assert.equal(formatExposure(1500), '1,5 s');
 });
 
-test('as faixas cobrem toda a escala sem buraco', () => {
-  for (const ms of EXPOSURE_STEPS) assert.ok(bandFor(ms), `sem faixa para ${ms} ms`);
-  assert.equal(bandFor(5).id, 'limiar');
-  assert.equal(bandFor(10).id, 'limiar');
-  assert.equal(bandFor(11).id, 'identificacao');
-  assert.equal(bandFor(50).id, 'multiplo');
-  assert.equal(bandFor(100).id, 'iconica');
-  assert.equal(bandFor(200).id, 'codificacao');
-  assert.equal(bandFor(500).id, 'memoria');
-  assert.equal(bandFor(10000).id, 'livre');
+test('a régua dos dígitos cobre toda a escala, do limiar ao tempo livre', () => {
+  const scale = BAND_SCALES.digits;
+  for (const ms of EXPOSURE_STEPS) assert.ok(bandIn(scale, ms), `sem faixa para ${ms} ms`);
+  assert.equal(bandIn(scale, 5).id, 'limiar');
+  assert.equal(bandIn(scale, 10).id, 'limiar');
+  assert.equal(bandIn(scale, 11).id, 'identificacao');
+  assert.equal(bandIn(scale, 50).id, 'multiplo');
+  assert.equal(bandIn(scale, 100).id, 'iconica');
+  assert.equal(bandIn(scale, 200).id, 'codificacao');
+  assert.equal(bandIn(scale, 500).id, 'memoria');
+  assert.equal(bandIn(scale, 10000).id, 'livre');
 });
 
-test('os limites das faixas são crescentes', () => {
-  for (let i = 1; i < PERCEPTION_BANDS.length; i++) {
-    assert.ok(PERCEPTION_BANDS[i].max > PERCEPTION_BANDS[i - 1].max);
+test('a régua das palavras cobre toda a escala, por palavra', () => {
+  const scale = BAND_SCALES.words;
+  for (const ms of EXPOSURE_STEPS) assert.ok(bandIn(scale, ms), `sem faixa para ${ms} ms`);
+  assert.equal(bandIn(scale, 30).id, 'lexical');
+  assert.equal(bandIn(scale, 60).id, 'fugaz');
+  assert.equal(bandIn(scale, 100).id, 'serial');
+  assert.equal(bandIn(scale, 170).id, 'veloz');
+  assert.equal(bandIn(scale, 250).id, 'tipico');
+  assert.equal(bandIn(scale, 400).id, 'confortavel');
+  assert.equal(bandIn(scale, 1000).id, 'sempressa');
+});
+
+test('as duas réguas têm 7 níveis e limites crescentes', () => {
+  for (const scale of [BAND_SCALES.digits, BAND_SCALES.words]) {
+    assert.equal(scale.bands.length, 7);
+    for (let i = 1; i < scale.bands.length; i++) {
+      assert.ok(scale.bands[i].max > scale.bands[i - 1].max, `${scale.id}: limites fora de ordem`);
+    }
+    assert.equal(levelOf(scale, scale.bands[0]), 7, 'a faixa mais rápida é o nível 7');
+    assert.equal(levelOf(scale, scale.bands[6]), 1, 'a faixa mais lenta é o nível 1');
   }
+});
+
+test('dígitos usam o tempo total; palavras e frases, o tempo por palavra', () => {
+  assert.equal(scaleForMode('digits').id, 'digits');
+  assert.equal(scaleForMode('words').id, 'words');
+  assert.equal(scaleForMode('sentence').id, 'words', 'frase também é estímulo verbal');
+  assert.equal(basisFor('digits', 600, 4), 600);
+  assert.equal(basisFor('words', 600, 3), 200);
+  assert.equal(basisFor('sentence', 800, 8), 100);
+});
+
+test('o mesmo tempo cai em níveis diferentes conforme o estímulo', () => {
+  const digitos = classify('digits', 600, 4);
+  const palavras = classify('words', 600, 3);
+  assert.equal(digitos.basisMs, 600);
+  assert.equal(palavras.basisMs, 200);
+  assert.notEqual(digitos.band.id, palavras.band.id);
+  assert.equal(digitos.scale.id, 'digits');
+  assert.equal(palavras.scale.id, 'words');
+});
+
+test('mais palavras no mesmo tempo total significam menos tempo por palavra', () => {
+  const poucas = classify('words', 1500, 3);
+  const muitas = classify('words', 1500, 10);
+  assert.ok(muitas.basisMs < poucas.basisMs);
+  assert.ok(muitas.level >= poucas.level, 'mais palavras no mesmo tempo é mais difícil');
+});
+
+test('a média só existe com os dois tipos e fica entre eles', () => {
+  assert.equal(averageLevel([{ level: 6 }, { level: 4 }]), 5);
+  assert.equal(averageLevel([{ level: 6 }, { level: 5 }]), 5.5);
+  assert.equal(averageLevel([{ level: 6 }, null]), null, 'faltando um tipo, não há média');
+  assert.equal(averageLevel([]), null);
+});
+
+test('formatLevel usa vírgula e omite casa decimal inteira', () => {
+  assert.equal(formatLevel(5), '5');
+  assert.equal(formatLevel(5.5), '5,5');
+  assert.equal(formatLevel(null), '—');
 });
 
 /* ---------------------------- intervalo --------------------------------- */
@@ -608,6 +694,63 @@ test('statsFor expõe o nível junto das demais estatísticas', () => {
   const stats = statsFor([fakeSession('digits', 1, 8, 2024, 2)], 'digits');
   assert.ok(stats.level, 'deveria haver nível');
   assert.equal(stats.level.exposureMs, 10000);
+});
+
+test('cada modo é classificado na sua própria régua', () => {
+  const sess = (mode, ms, count, perfect, day) => ({
+    id: `${mode}${day}`, mode, config: { count, exposureMs: ms },
+    finishedAt: new Date(2026, 0, day).toISOString(),
+    totals: { accuracy: 0.9, correct: 9, total: 10, perfectSeries: perfect }, series: [],
+  });
+  const history = [
+    sess('digits', 80, 4, 2, 1),
+    sess('digits', 40, 4, 0, 2),   // sem série perfeita: não conta
+    sess('words', 900, 5, 1, 3),
+    sess('sentence', 4000, 8, 1, 4),
+  ];
+  const levels = levelsByMode(history);
+  assert.equal(levels.digits.basisMs, 80, 'dígitos comparam o tempo total');
+  assert.equal(levels.words.basisMs, 180, 'palavras comparam o tempo por palavra');
+  assert.equal(levels.sentence.basisMs, 500);
+  assert.equal(levels.digits.scale.id, 'digits');
+  assert.equal(levels.words.scale.id, 'words');
+});
+
+test('a média do histórico combina dígitos e palavras, sem as frases', () => {
+  const sess = (mode, ms, count, day) => ({
+    id: `${mode}${day}`, mode, config: { count, exposureMs: ms },
+    finishedAt: new Date(2026, 0, day).toISOString(),
+    totals: { accuracy: 1, correct: 10, total: 10, perfectSeries: 1 }, series: [],
+  });
+  const comAmbos = levelsByMode([sess('digits', 80, 4, 1), sess('words', 900, 5, 2)]);
+  assert.equal(comAmbos.average, (comAmbos.digits.level + comAmbos.words.level) / 2);
+
+  const soDigitos = levelsByMode([sess('digits', 80, 4, 1)]);
+  assert.equal(soDigitos.average, null);
+
+  const semPalavras = levelsByMode([sess('digits', 80, 4, 1), sess('sentence', 4000, 8, 2)]);
+  assert.equal(semPalavras.average, null, 'frases não substituem o teste de palavras');
+});
+
+test('levelFrom escolhe o menor valor na régua do modo, não o menor tempo total', () => {
+  const sess = (mode, ms, count, day) => ({
+    id: `${mode}${day}`, mode, config: { count, exposureMs: ms },
+    finishedAt: new Date(2026, 0, day).toISOString(),
+    totals: { accuracy: 1, correct: 10, total: 10, perfectSeries: 1 }, series: [],
+  });
+  // 1000 ms para 10 palavras (100 ms/palavra) é melhor que 600 ms para 3 (200 ms/palavra)
+  const level = levelFrom([sess('words', 600, 3, 1), sess('words', 1000, 10, 2)], 'words');
+  assert.equal(level.basisMs, 100);
+  assert.equal(level.exposureMs, 1000);
+});
+
+test('testLevels pega o teste mais recente de cada tipo e a média', () => {
+  const t = (mode, level, id) => ({ id, mode, level, thresholdMs: 100 });
+  const levels = testLevels([t('digits', 6, 'a'), t('words', 3, 'b'), t('digits', 4, 'c')]);
+  assert.equal(levels.digits.level, 4, 'o mais recente, não o melhor');
+  assert.equal(levels.words.level, 3);
+  assert.equal(levels.average, 3.5);
+  assert.equal(testLevels([t('digits', 6, 'a')]).average, null);
 });
 
 test('importHistory rejeita conteúdo que não é lista', () => {

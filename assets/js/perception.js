@@ -1,8 +1,16 @@
-// Escala de tempos de exposição e a classificação perceptual associada.
+// Escala de tempos de exposição e as classificações perceptuais associadas.
 //
-// A tabela de faixas é informativa: descreve o que a literatura de percepção
-// visual e memória icônica costuma observar em cada duração. Serve para situar
-// o treino, não para diagnosticar nada.
+// São DUAS réguas, porque os dois estímulos não se comparam na mesma:
+//
+// - Dígitos: a régua é o tempo TOTAL de exibição da sequência. Vem da
+//   literatura de memória icônica, onde um punhado de caracteres é exposto de
+//   uma vez e a pessoa relata o que conseguiu.
+// - Palavras: a régua é o tempo POR PALAVRA. Ler exige acesso ao léxico, e a
+//   literatura de leitura mede justamente isso — duração da fixação e ritmo em
+//   apresentação serial. Normalizar por palavra deixa a medida comparável entre
+//   uma série de 3 e uma de 10 palavras.
+//
+// Ambas são referências aproximadas, em condições ideais, para situar o treino.
 
 /**
  * Passos do seletor de exposição, em milissegundos. Finos embaixo (onde 5 ms
@@ -31,18 +39,18 @@ export function stepIndexFor(ms) {
 
 /** "5 ms", "250 ms", "1,5 s", "10 s" */
 export function formatExposure(ms) {
-  if (ms < 1000) return `${ms} ms`;
-  const s = ms / 1000;
+  const rounded = ms < 1000 ? Math.round(ms) : ms;
+  if (rounded < 1000) return `${rounded} ms`;
+  const s = rounded / 1000;
   const text = Number.isInteger(s) ? String(s) : s.toFixed(1).replace('.', ',');
   return `${text} s`;
 }
 
 /**
- * Faixas de exposição. `max` é o limite superior inclusivo, em ms.
- * As seis primeiras vêm da tabela de referência; a última é a extensão para
- * tempos acima dela, onde o desafio deixa de ser perceptual.
+ * Faixas para DÍGITOS, pelo tempo total de exibição da sequência.
+ * `max` é o limite superior inclusivo, em ms.
  */
-export const PERCEPTION_BANDS = [
+export const DIGIT_BANDS = [
   {
     id: 'limiar',
     max: 10,
@@ -94,12 +102,137 @@ export const PERCEPTION_BANDS = [
   },
 ];
 
-/** Faixa perceptual correspondente a uma exposição em ms. */
-export function bandFor(ms) {
-  return PERCEPTION_BANDS.find((b) => ms <= b.max) || PERCEPTION_BANDS[PERCEPTION_BANDS.length - 1];
+/**
+ * Faixas para PALAVRAS, pelo tempo por palavra.
+ *
+ * Ancoradas em três referências da pesquisa em leitura: a fixação média na
+ * leitura silenciosa fica em torno de 200 a 250 ms por palavra; leitura veloz
+ * treinada chega perto de 120 a 200 ms por palavra; e, em apresentação serial
+ * rápida, a compreensão desaba abaixo de cerca de 100 ms por palavra. Abaixo
+ * disso entra o terreno do reconhecimento de palavra isolada com máscara, que
+ * pode acontecer por volta de 30 a 50 ms.
+ */
+export const WORD_BANDS = [
+  {
+    id: 'lexical',
+    max: 35,
+    range: 'até 35 ms/palavra',
+    name: 'Limiar lexical',
+    text: 'Nesse tempo, mesmo uma palavra isolada só é identificada em condições ideais. Captar várias é improvável.',
+  },
+  {
+    id: 'fugaz',
+    max: 70,
+    range: '35–70 ms/palavra',
+    name: 'Reconhecimento fugaz',
+    text: 'Uma ou outra palavra pode ser reconhecida, mas a maior parte escapa antes de virar memória.',
+  },
+  {
+    id: 'serial',
+    max: 120,
+    range: '70–120 ms/palavra',
+    name: 'Acima da leitura veloz',
+    text: 'Mais rápido do que a compreensão costuma acompanhar em apresentação serial. Exige palavras curtas e familiares.',
+  },
+  {
+    id: 'veloz',
+    max: 200,
+    range: '120–200 ms/palavra',
+    name: 'Ritmo de leitura veloz',
+    text: 'Perto do limite de leitores rápidos e treinados, algo como 300 a 500 palavras por minuto.',
+  },
+  {
+    id: 'tipico',
+    max: 300,
+    range: '200–300 ms/palavra',
+    name: 'Ritmo de leitura típico',
+    text: 'Faixa da fixação média na leitura silenciosa: cerca de 200 a 300 palavras por minuto.',
+  },
+  {
+    id: 'confortavel',
+    max: 500,
+    range: '300–500 ms/palavra',
+    name: 'Leitura confortável',
+    text: 'Tempo de sobra para ler cada palavra e ainda começar a organizar a memorização.',
+  },
+  {
+    id: 'sempressa',
+    max: Infinity,
+    range: 'acima de 500 ms/palavra',
+    name: 'Sem pressa',
+    text: 'A leitura deixou de ser o gargalo: o desafio é inteiramente de memória e estratégia.',
+  },
+];
+
+/** As duas réguas, com o rótulo da unidade em que cada uma mede. */
+export const BAND_SCALES = {
+  digits: {
+    id: 'digits',
+    label: 'Dígitos',
+    unit: 'tempo total da série',
+    unitShort: 'total',
+    perItem: false,
+    bands: DIGIT_BANDS,
+  },
+  words: {
+    id: 'words',
+    label: 'Palavras',
+    unit: 'tempo por palavra',
+    unitShort: 'por palavra',
+    perItem: true,
+    bands: WORD_BANDS,
+  },
+};
+
+/** Régua de um modo de treino. Frases também são estímulo verbal. */
+export function scaleForMode(mode) {
+  return mode === 'digits' ? BAND_SCALES.digits : BAND_SCALES.words;
 }
 
-/** Posição (1-based) da faixa na tabela, para exibir como "nível". */
-export function bandLevel(band) {
-  return PERCEPTION_BANDS.length - PERCEPTION_BANDS.indexOf(band);
+/**
+ * Valor que a régua do modo compara: total para dígitos, por palavra para
+ * estímulos verbais.
+ */
+export function basisFor(mode, exposureMs, count) {
+  const scale = scaleForMode(mode);
+  if (!scale.perItem) return exposureMs;
+  return count > 0 ? exposureMs / count : exposureMs;
+}
+
+/** Faixa dentro de uma régua. */
+export function bandIn(scale, basisMs) {
+  return scale.bands.find((b) => basisMs <= b.max) || scale.bands[scale.bands.length - 1];
+}
+
+/** Posição da faixa na régua: 1 é a mais lenta, 7 a mais rápida. */
+export function levelOf(scale, band) {
+  return scale.bands.length - scale.bands.indexOf(band);
+}
+
+/**
+ * Classifica uma exposição no modo indicado.
+ * @returns {{scale:object, band:object, level:number, levels:number, basisMs:number}}
+ */
+export function classify(mode, exposureMs, count) {
+  const scale = scaleForMode(mode);
+  const basisMs = basisFor(mode, exposureMs, count);
+  const band = bandIn(scale, basisMs);
+  return { scale, band, level: levelOf(scale, band), levels: scale.bands.length, basisMs };
+}
+
+/**
+ * Média dos níveis de dígitos e palavras — as duas famílias de estímulo.
+ * @param {Array<{level:number}|null>} entries
+ * @returns {number|null} média, ou null se faltar algum dos dois
+ */
+export function averageLevel(entries) {
+  const valid = entries.filter((e) => e && typeof e.level === 'number');
+  if (valid.length < 2) return null;
+  return valid.reduce((a, e) => a + e.level, 0) / valid.length;
+}
+
+/** "5,5" com vírgula, sem casa decimal quando é inteiro. */
+export function formatLevel(level) {
+  if (level === null || level === undefined) return '—';
+  return Number.isInteger(level) ? String(level) : level.toFixed(1).replace('.', ',');
 }
