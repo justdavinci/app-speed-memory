@@ -6,7 +6,7 @@
 // mais preciso do que realmente é.
 
 import * as store from './store.js';
-import { retentionPoints } from './retention.js';
+import { getRetentionReport, retentionPoints } from './retention.js';
 
 const clamp100 = (v) => Math.max(0, Math.min(100, Math.round(v)));
 const pct = (v) => `${Math.round(v * 100)}%`;
@@ -44,7 +44,7 @@ function benchmarkComponent(block, name, description, evidenceLabel) {
 
 export function processingProfile() {
   const availability = store.getAvailabilityReport();
-  const retention = store.getRetentionReport();
+  const retention = getRetentionReport();
   const transfer = store.getTransferReport();
 
   const components = [
