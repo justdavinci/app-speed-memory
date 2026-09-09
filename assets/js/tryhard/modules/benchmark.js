@@ -8,11 +8,11 @@
 import { TRY_HARD_CONFIG } from '../config.js';
 import { generateItems, poolFor } from '../stimuli.js';
 import { comparePositional } from '../metrics.js';
+import { recordBenchmarkProfile } from '../processingProfile.js';
 import peripheralMatrix from './peripheralMatrix.js';
 import abstractFlash from './abstractFlash.js';
 import iconicReadout from './iconicReadout.js';
 
-/** Protocolo v1: quatro blocos de cinco tentativas, sempre nesta ordem. */
 export const BENCHMARK_PROTOCOL = {
   version: TRY_HARD_CONFIG.benchmarkProtocolVersion,
   blocks: [
@@ -40,14 +40,16 @@ export default {
   protocolTrials: BENCHMARK_TRIALS,
   protocolVersion: BENCHMARK_PROTOCOL.version,
 
+  beginBlock() {
+    return { profileTrials: [] };
+  },
+
   generate(ctx) {
     const block = blockFor(ctx.trialIndex || 0);
     const shared = { ...ctx, difficulty: block.difficulty, stimulus: block.stimulus };
     let trial;
 
     if (block.id === 'sequence') {
-      // Sequência sem máscara, evitando padrões fáceis de comprimir: no
-      // benchmark isso mediria memória de regra, não percepção.
       const items = generateItems(block.stimulus, block.difficulty.stimulusCount, {
         rng: ctx.rng,
         avoidCompressible: true,
@@ -83,8 +85,37 @@ export default {
   },
 
   score(trial, given) {
-    return trial.score
-      ? trial.score(trial, given)
-      : comparePositional(trial.expected, given);
+    return trial.score ? trial.score(trial, given) : comparePositional(trial.expected, given);
+  },
+
+  onTrialRecorded({ trial, result, record, context }) {
+    if (!context?.profileTrials) return;
+    context.profileTrials.push({
+      block: trial.benchmarkBlock,
+      protocolVersion: trial.protocolVersion,
+      timestamp: record.timestamp,
+      correctItems: result.correct,
+      totalItems: result.total,
+      accuracy: result.itemAccuracy,
+      requestedExposureMs: record.requestedExposureMs,
+      actualExposureMs: record.actualExposureMs,
+      rows: trial.matrix?.rows || trial.difficultyState?.matrixRows || null,
+      cols: trial.matrix?.cols || trial.difficultyState?.matrixColumns || null,
+      cueDelayMs: trial.cueDelayMs || 0,
+    });
+  },
+
+  finishBlock({ context }) {
+    if (!context?.profileTrials?.length) return null;
+    recordBenchmarkProfile({
+      protocolVersion: BENCHMARK_PROTOCOL.version,
+      completedAt: new Date().toISOString(),
+      trials: context.profileTrials,
+    });
+    // A persistência acima é side-effect deliberado. Não devolvemos payload
+    // porque o runner reserva `finishBlock()` para resumos específicos do
+    // módulo (Transfer usa esse canal) e não queremos o benchmark parecer
+    // resultado de transferência.
+    return null;
   },
 };
