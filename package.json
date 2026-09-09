@@ -6,7 +6,8 @@
   "description": "PiscaMemory — treino de memória rápida (dígitos, palavras e frases), mobile-first e sem dependências.",
   "scripts": {
     "start": "node scripts/serve.js",
-    "test": "node tests/run.js",
+    "test": "node tests/run.js && node tests/audit-v2.js",
+    "test:audit": "node tests/audit-v2.js",
     "icons": "node scripts/gen-icons.js"
   },
   "license": "MIT"
