@@ -57,8 +57,11 @@ export const TRANSFER_TIERS = [
 export const MAX_TIER = TRANSFER_TIERS.length - 1;
 
 export const TRANSFER_CONFIG = {
-  version: 1,
-  templateVersion: 1,
+  version: 2,
+  // v2 invalida o log anterior porque, antes da auditoria, modelos holdout
+  // podiam aparecer durante o treino. Depois que alguém vê um holdout com
+  // feedback, ele deixa de ser um conjunto de validação independente.
+  templateVersion: 2,
   benchmarkVersion: 1,
 
   /** Distância aceitável entre o que já foi treinado e o que é novo. */
@@ -68,15 +71,20 @@ export const TRANSFER_CONFIG = {
   /** Acima disto o sistema declara sobreajuste e reequilibra o currículo. */
   overfitGapThreshold: 0.28,
 
-  /** Mínimo de tentativas de cada lado antes de confiar na comparação. */
+  /** Mínimo de tentativas comparáveis de cada lado antes de confiar na lacuna. */
   minTrialsPerSide: 6,
   /** Janela de análise das métricas de transferência. */
   metricsWindow: 60,
+  /** Exposições dentro deste balde são tratadas como a mesma condição física. */
+  gapExposureBucketMs: 25,
 
   /** Fração de tentativas com material inédito, por preset. */
   noveltyRange: [0.2, 0.85],
-  /** Fração de tentativas reservadas a modelos nunca treinados (validação). */
-  holdoutRate: 0.15,
+  /**
+   * Holdouts são validation-only: nunca entram no treino nem no Modo Caos.
+   * O benchmark é o único caminho normal que pode solicitá-los.
+   */
+  holdoutPolicy: 'validation-only',
   /** Nenhum modelo pode passar disto na janela recente. */
   templateShareCeiling: 0.35,
 
