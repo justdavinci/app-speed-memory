@@ -7,6 +7,17 @@ import {
   recalibrateRetention, updateRetentionSettings,
 } from './retention.js';
 
+// A folha extra é carregada pelo módulo para não exigir um segundo bundle nem
+// abrir teclado virtual no mobile. Como este módulo é importado pelo Try Hard,
+// o CSS entra só quando essa área existe.
+if (typeof document !== 'undefined' && !document.querySelector('link[data-tryhard-enhancements]')) {
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = new URL('../../css/tryhard-enhancements.css', import.meta.url).href;
+  link.dataset.tryhardEnhancements = 'true';
+  document.head.appendChild(link);
+}
+
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const fmt = (v) => {
@@ -18,9 +29,9 @@ export function configCard() {
   const s = getRetentionSettings();
   const r = getRetentionReport();
   return `<div class="card">
+      <p class="th-kicker">Treino pós-estímulo · objetivo 2</p>
       <h2 class="card__title">Retenção pós-estímulo</h2>
-      <p class="th-hint">Segundo objetivo temporal: em vez de fazer a pergunta aparecer cada vez mais cedo,
-        você força a representação a sobreviver por mais tempo antes de poder responder.</p>
+      <p class="th-hint">Em vez de fazer a pergunta aparecer cada vez mais cedo, force a representação a sobreviver por mais tempo antes de poder responder.</p>
 
       <label class="switch">
         <span><strong>Treino de retenção</strong><small>As tentativas são separadas do T80 de disponibilidade.</small></span>
@@ -34,8 +45,7 @@ export function configCard() {
             <output class="field__value" id="out-rt-share">${Math.round(s.share * 100)}%</output></div>
           <input class="stepper__range" type="range" id="rt-share" min="10" max="80" step="5"
                  value="${Math.round(s.share * 100)}" aria-label="Fração de retenção" />
-          <p class="field__hint">Se Disponibilidade também estiver ligada, Retenção ocupa sua própria fração de tentativas;
-            nunca são aplicadas juntas na mesma tentativa.</p>
+          <p class="field__hint">Se Disponibilidade também estiver ligada, Retenção ocupa sua própria fração de tentativas; nunca são aplicadas juntas na mesma tentativa.</p>
         </div>
 
         <div class="field">
@@ -61,8 +71,7 @@ export function configCard() {
         <button class="btn btn--ghost" id="rt-recalibrate">Recalibrar retenção</button>
       </div>
 
-      <p class="chart__caption">Retention T80 é uma métrica funcional interna: maior é melhor. Não mede duração da memória icônica
-        nem um tempo neural direto.</p>
+      <p class="chart__caption">Retention T80 é uma métrica funcional interna: maior é melhor. Não mede duração da memória icônica nem um tempo neural direto.</p>
     </div>`;
 }
 
@@ -95,18 +104,11 @@ function rangeFields(s) {
 
 export function bindConfig(hooks = {}) {
   const rerender = hooks.render || (() => {});
-  $('#rt-enabled')?.addEventListener('change', (e) => {
-    updateRetentionSettings({ enabled: e.target.checked });
-    rerender();
-  });
-  $$('[data-rt-mode]').forEach((btn) => btn.addEventListener('click', () => {
-    updateRetentionSettings({ mode: btn.dataset.rtMode });
-    rerender();
-  }));
-
+  $('#rt-enabled')?.addEventListener('change', (e) => { updateRetentionSettings({ enabled: e.target.checked }); rerender(); });
+  $$('[data-rt-mode]').forEach((btn) => btn.addEventListener('click', () => { updateRetentionSettings({ mode: btn.dataset.rtMode }); rerender(); }));
   const slider = (id, out, map, patch) => {
     const el = $(`#${id}`);
-    el?.addEventListener('input', () => { $(`#${out}`).textContent = map(Number(el.value)); });
+    el?.addEventListener('input', () => { const output = $(`#${out}`); if (output) output.textContent = map(Number(el.value)); });
     el?.addEventListener('change', () => updateRetentionSettings(patch(Number(el.value))));
   };
   slider('rt-share', 'out-rt-share', (v) => `${v}%`, (v) => ({ share: v / 100 }));
@@ -116,36 +118,24 @@ export function bindConfig(hooks = {}) {
   slider('rt-fixed', 'out-rt-fixed', fmt, (v) => ({ fixedDelayMs: v }));
   slider('rt-range-min', 'out-rt-range-min', fmt, (v) => ({ rangeMinMs: v }));
   slider('rt-range-max', 'out-rt-range-max', fmt, (v) => ({ rangeMaxMs: v }));
-
-  $('#rt-recalibrate')?.addEventListener('click', () => {
-    recalibrateRetention();
-    hooks.toast?.('Retenção recalibrada.');
-    rerender();
-  });
+  $('#rt-recalibrate')?.addEventListener('click', () => { recalibrateRetention(); hooks.toast?.('Retenção recalibrada.'); rerender(); });
 }
 
 export function progressCard() {
   const r = getRetentionReport();
   const series = getRetentionSeries();
   const last = series[series.length - 1] || null;
-  return `<div class="card">
-      <h2 class="card__title">Retenção</h2>
-      <div class="tiles">
-        <div class="tile"><div class="tile__value">${fmt(r.t80)}</div><div class="tile__label">Retention T80</div></div>
+  return `<div class="card"><h2 class="card__title">Retenção</h2>
+      <div class="tiles"><div class="tile"><div class="tile__value">${fmt(r.t80)}</div><div class="tile__label">Retention T80</div></div>
         <div class="tile"><div class="tile__value">${fmt(r.currentDelayMs)}</div><div class="tile__label">intervalo atual</div></div>
-        <div class="tile"><div class="tile__value">${last?.accuracy === undefined ? '—' : pct(last.accuracy)}</div><div class="tile__label">acerto recente</div></div>
-      </div>
-      <p class="chart__caption">Maior é melhor: é o lado direito da janela pós-estímulo. A Disponibilidade mede o lado esquerdo, isto é, quão cedo você consegue usar a informação.</p>
-    </div>`;
+        <div class="tile"><div class="tile__value">${last?.accuracy === undefined ? '—' : pct(last.accuracy)}</div><div class="tile__label">acerto recente</div></div></div>
+      <p class="chart__caption">Maior é melhor: é o lado direito da janela pós-estímulo. Availability mede o lado esquerdo.</p></div>`;
 }
 
 export function sessionSummary(session) {
   const blocks = session.modules.filter((m) => m.retention?.trials);
   if (!blocks.length) return '';
   const r = blocks[blocks.length - 1].retention;
-  return `<div class="th-result__transfer">
-      <p class="th-kicker">Retenção</p>
-      <p class="th-big-line">Retention T80 ${fmt(r.t80)}</p>
-      <p class="th-hint">${r.trials} tentativas · acerto ${r.accuracy === null ? '—' : pct(r.accuracy)} · confiança ${esc(r.confidence)}</p>
-    </div>`;
+  return `<div class="th-result__transfer"><p class="th-kicker">Retenção</p><p class="th-big-line">Retention T80 ${fmt(r.t80)}</p>
+      <p class="th-hint">${r.trials} tentativas · acerto ${r.accuracy === null ? '—' : pct(r.accuracy)} · confiança ${esc(r.confidence)}</p></div>`;
 }
