@@ -23,7 +23,9 @@ import {
 import { SYMBOL_IDS, symbolSvg } from '../assets/js/tryhard/symbols.js';
 import { getModule, MODULES, BENCHMARK_TRIALS } from '../assets/js/tryhard/modules/index.js';
 import * as store from '../assets/js/tryhard/store.js';
-import { blockBudget, createControl, difficultyForBlock, fixationDuration, runModuleBlock } from '../assets/js/tryhard/runner.js';
+import {
+  blockBudget, createControl, difficultyForBlock, fixationDuration, runModuleBlock, runRoutineSession,
+} from '../assets/js/tryhard/runner.js';
 
 /** Interface falsa: responde com a precisão pedida, sem navegador. */
 function fakeView({ ability = 1, onTrial } = {}) {
@@ -695,6 +697,63 @@ export function register({ test, group }) {
     );
     assert.ok(resumo.trials >= 2 && resumo.trials < 50, `parou em ${resumo.trials}`);
     assert.equal(store.getModuleStats('peripheral-matrix').trialsDone, resumo.trials);
+  });
+
+  test('encerrar avisa quem está esperando o usuário', () => {
+    const control = createControl();
+    let avisado = 0;
+    control.onAbort(() => { avisado += 1; });
+    const cancelar = control.onAbort(() => { avisado += 10; });
+    cancelar();
+    control.abort();
+    assert.equal(avisado, 1, 'o aviso cancelado não deveria disparar');
+
+    // quem se inscreve depois do encerramento é avisado na hora
+    let tardio = false;
+    control.onAbort(() => { tardio = true; });
+    assert.ok(tardio);
+  });
+
+  test('encerrar destrava a sessão parada esperando resposta', async () => {
+    store.setBackendForTesting();
+    const control = createControl();
+    // Interface que NUNCA responde sozinha, como a tela real enquanto a pessoa
+    // olha para o widget: só o encerramento pode soltar a espera.
+    const view = {
+      ...fakeView(),
+      collectResponse: () => new Promise((resolve) => {
+        control.onAbort(() => resolve({ items: [], reactionMs: 0, aborted: true }));
+      }),
+    };
+    setTimeout(() => control.abort(), 20);
+    const resumo = await runModuleBlock(
+      { moduleId: 'peripheral-matrix', trials: 50, preset: 'tryhard', adaptive: true, stimulus: 'digits' },
+      view, control, { seed: 31 },
+    );
+    assert.ok(resumo, 'a sessão precisa terminar mesmo sem resposta do usuário');
+    assert.equal(resumo.trials, 0);
+  });
+
+  test('encerrar destrava a sessão parada no resumo entre exercícios', async () => {
+    store.setBackendForTesting();
+    const control = createControl();
+    const view = {
+      ...fakeView({ ability: 1 }),
+      showModuleSummary: () => new Promise((resolve) => {
+        control.onAbort(() => resolve({ aborted: true }));
+      }),
+    };
+    setTimeout(() => control.abort(), 40);
+    const rotina = {
+      id: 'r', name: 'Dois módulos',
+      modules: [
+        { moduleId: 'peripheral-matrix', trials: 1, preset: 'tryhard', adaptive: true, stimulus: 'digits' },
+        { moduleId: 'abstract-flash', trials: 1, preset: 'tryhard', adaptive: true, stimulus: 'symbols' },
+      ],
+    };
+    const sessao = await runRoutineSession(rotina, view, control, { seed: 32 });
+    assert.ok(sessao, 'a sessão precisa terminar mesmo parada no resumo');
+    assert.equal(sessao.completed, false);
   });
 
   test('a pausa marca retomada para recomeçar com contagem', () => {

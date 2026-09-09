@@ -72,11 +72,28 @@ export function createView(refs) {
   const feedbackEl = refs.feedback;
 
   let advanced = false;
+  let control = null;
 
   const clearLayer = () => { layer.innerHTML = ''; layer.hidden = true; };
+  const signal = () => control?.signal;
+
+  /**
+   * Promessa que espera o usuário mas também termina se a sessão for
+   * encerrada. Toda espera interativa passa por aqui — é o que impede o
+   * overlay de ficar preso quando alguém toca em encerrar.
+   */
+  const interactive = (build) => new Promise((resolve) => {
+    let off = () => {};
+    const done = (value) => { off(); resolve(value); };
+    off = control?.onAbort?.(() => done({ aborted: true })) || (() => {});
+    build(done);
+  });
 
   const view = {
     setAdvancedMetrics(on) { advanced = !!on; },
+
+    /** Liga a interface ao controle da sessão em curso. */
+    bindControl(sessionControl) { control = sessionControl; },
 
     setPhase({ name, position }) {
       refs.moduleName.textContent = name;
@@ -118,10 +135,11 @@ export function createView(refs) {
     async showCountdown(seconds, { name } = {}) {
       refs.stage.dataset.stage = 'countdown';
       for (let n = seconds; n > 0; n--) {
+        if (signal()?.aborted) break;
         refs.center.innerHTML = `<div class="th-countdown">${n}</div>`
           + (name ? `<p class="th-hint">${esc(name)}</p>` : '');
         // eslint-disable-next-line no-await-in-loop
-        await waitMs(700);
+        await waitMs(700, signal());
       }
       refs.center.innerHTML = '';
     },
@@ -129,7 +147,7 @@ export function createView(refs) {
     async showFixation(ms, { keep } = {}) {
       refs.stage.dataset.stage = 'fixation';
       refs.center.innerHTML = '<div class="th-fixation">+</div>';
-      await waitMs(ms);
+      await waitMs(ms, signal());
       if (!keep) refs.center.innerHTML = '';
     },
 
@@ -210,18 +228,18 @@ export function createView(refs) {
       feedbackEl.hidden = false;
       feedbackEl.innerHTML = `<p class="th-feedback__title is-warn">Tentativa descartada</p>`
         + `<p class="th-hint">${esc(reason || 'Algo interrompeu a apresentação.')}</p>`;
-      await waitMs(900);
+      await waitMs(900, signal());
       feedbackEl.hidden = true;
     },
 
-    collectResponse(trial, control) {
+    collectResponse(trial) {
       refs.stage.dataset.stage = 'response';
-      return collectResponse({ trial, control, promptEl, responseEl });
+      return collectResponse({ trial, promptEl, responseEl, interactive });
     },
 
     async showFeedback(result, trial, info) {
       const mode = info.mode || 'full';
-      if (mode === 'none') { await waitMs(120); return; }
+      if (mode === 'none') { await waitMs(120, signal()); return; }
       refs.stage.dataset.stage = 'feedback';
       responseEl.innerHTML = '';
       promptEl.textContent = '';
@@ -241,12 +259,12 @@ export function createView(refs) {
         + (lines.length ? `<p class="th-hint">${lines.map(esc).join(' · ')}</p>` : '')
         + (info.newRecords?.length ? '<p class="th-record">novo recorde</p>' : '');
 
-      await waitMs(mode === 'full' ? TRY_HARD_CONFIG.feedbackFullMs : TRY_HARD_CONFIG.feedbackMinimalMs);
+      await waitMs(mode === 'full' ? TRY_HARD_CONFIG.feedbackFullMs : TRY_HARD_CONFIG.feedbackMinimalMs, signal());
       feedbackEl.hidden = true;
     },
 
     showFatigueNotice(fatigue) {
-      return new Promise((resolve) => {
+      return interactive((done) => {
         feedbackEl.hidden = false;
         feedbackEl.innerHTML = `<p class="th-feedback__title is-warn">Desempenho caiu ${Math.round(fatigue.drop * 100)}%</p>`
           + '<p class="th-hint">Nos últimos minutos, comparado ao começo. Uma pausa pode ajudar.</p>'
@@ -257,14 +275,14 @@ export function createView(refs) {
           if (!choice) return;
           feedbackEl.removeEventListener('click', onClick);
           feedbackEl.hidden = true;
-          resolve(choice);
+          done(choice);
         };
         feedbackEl.addEventListener('click', onClick);
       });
     },
 
     showModuleSummary(summary, { next } = {}) {
-      return new Promise((resolve) => {
+      return interactive((done) => {
         refs.stage.dataset.stage = 'summary';
         refs.summary.hidden = false;
         refs.summary.innerHTML = moduleSummaryMarkup(summary, next);
@@ -273,7 +291,7 @@ export function createView(refs) {
           if (!action) return;
           refs.summary.removeEventListener('click', onClick);
           refs.summary.hidden = true;
-          resolve(action);
+          done(action);
         };
         refs.summary.addEventListener('click', onClick);
       });
@@ -322,21 +340,17 @@ export function moduleSummaryMarkup(summary, next) {
  * Todos os widgets são de toque, grandes e sem teclado do sistema: entre o
  * flash e a resposta não pode haver nada lento.
  */
-function collectResponse({ trial, control, promptEl, responseEl }) {
+function collectResponse({ trial, promptEl, responseEl, interactive }) {
   const spec = trial.response;
   promptEl.textContent = spec.prompt || '';
   const started = performance.now();
 
-  return new Promise((resolve) => {
+  return interactive((finish) => {
     const done = (items) => {
       responseEl.innerHTML = '';
-      resolve({ items, reactionMs: Math.round(performance.now() - started) });
+      responseEl.onclick = null;
+      finish({ items, reactionMs: Math.round(performance.now() - started) });
     };
-    const abortIfNeeded = () => {
-      if (control?.aborted) { resolve({ items: [], reactionMs: 0, aborted: true }); return true; }
-      return false;
-    };
-    if (abortIfNeeded()) return;
 
     switch (spec.kind) {
       case 'chips': return renderChips(responseEl, spec, done);

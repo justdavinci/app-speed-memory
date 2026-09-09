@@ -739,6 +739,7 @@ async function startRoutine(routine) {
     sessionBar: $('#th-session-bar'),
   });
   view.setAdvancedMetrics(store.getSettings().advancedMetrics);
+  view.bindControl(control);
   state.view = view;
   view.reset();
 
