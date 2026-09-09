@@ -28,11 +28,10 @@ export function card() {
           <p class="th-kicker">Perfil de processamento</p>
           <h2 class="card__title">7 subscores funcionais</h2>
         </div>
-        <div class="th-profile-composite"><strong>${p.composite === null ? '—' : p.composite}</strong><span>média interna</span></div>
       </div>
       <p class="th-hint">Pontos de Processamento (0–100). Funcionam como um mapa de subcomponentes do app, não como “subQI” normativo.</p>
       <div class="th-subscore-grid">${cells}</div>
       ${diagnosis}
-      <p class="chart__caption">Cada ponto precisa ser lido junto com o dado bruto e a confiança. Sem amostra comparável, o app mostra “—” em vez de estimar.</p>
+      <p class="chart__caption">São exatamente sete pontos principais. Cada um precisa ser lido junto com o dado bruto e a confiança; sem amostra comparável, o app mostra “—” em vez de estimar.</p>
     </div>`;
 }
