@@ -8,9 +8,8 @@
 // Três garantias:
 //  1. nenhum modelo domina a janela recente;
 //  2. parte das exposições usa material que a pessoa nunca treinou;
-//  3. alguns modelos são RESERVADOS — nunca aparecem em treino, só em
-//     validação. É contra eles que se mede transferência de verdade, porque
-//     não há como ter praticado especificamente para eles.
+//  3. alguns modelos são HOLDOUTS VERDADEIROS — nunca aparecem em treino,
+//     inclusive no Modo Caos. Só podem aparecer em validação/benchmark.
 
 import { MAX_TIER, TRANSFER_CONFIG, TRANSFER_TIERS } from './config.js';
 import { allTemplates, getFamily } from './families/index.js';
@@ -22,7 +21,7 @@ export function createNoveltyState() {
   return { recent: [], lastKey: null, lastKinds: [], lastAnswers: [] };
 }
 
-/** Famílias liberadas numa faixa, incluindo as das faixas anteriores. */
+/** Famílias liberadas numa faixa. */
 export function familiesForTier(tier) {
   const t = Math.min(MAX_TIER, Math.max(0, Math.round(tier)));
   return TRANSFER_TIERS[t].families;
@@ -43,14 +42,10 @@ function shareOf(recent, key) {
 /**
  * Escolhe o próximo modelo.
  *
- * @param {object} opts
- * @param {number} opts.tier            faixa atual
- * @param {function} opts.rng
- * @param {object} opts.state           createNoveltyState()
- * @param {Set|Array} opts.trainedKeys  modelos já treinados alguma vez
- * @param {number} opts.noveltyRate     fração desejada de material inédito
- * @param {'training'|'validation'|'chaos'} [opts.mode]
- * @returns {{familyId, templateId, key, novel:boolean, holdout:boolean, reason:string}}
+ * `training` e `chaos` usam SOMENTE o pool aberto. `validation` usa SOMENTE
+ * holdouts. Esta separação é propositalmente rígida: depois que um template
+ * reservado aparece com resposta/feedback, ele já não é uma medida limpa de
+ * transferência futura.
  */
 export function pickTemplate({
   tier, rng = Math.random, state = createNoveltyState(), trainedKeys = [],
@@ -67,15 +62,15 @@ export function pickTemplate({
 
   let bucket;
   let reason;
-  if (mode === 'validation' && holdouts.length) {
+  if (mode === 'validation') {
+    // Falhar explicitamente é melhor que cair silenciosamente no pool treinável
+    // e chamar aquilo de validação.
+    if (!holdouts.length) throw new Error(`Sem holdout disponível na faixa ${tier}`);
     bucket = holdouts;
     reason = 'reservado';
   } else if (mode === 'chaos') {
     bucket = unseen.length ? unseen : openPool;
     reason = 'caos';
-  } else if (rng() < TRANSFER_CONFIG.holdoutRate && holdouts.length) {
-    bucket = holdouts;
-    reason = 'reservado';
   } else if (unseen.length && rng() < noveltyRate) {
     bucket = unseen;
     reason = 'inédito';
@@ -86,7 +81,12 @@ export function pickTemplate({
     bucket = openPool;
     reason = 'inédito';
   }
-  if (!bucket.length) bucket = withKey;
+
+  // Em treino nunca existe fallback para `withKey`, pois isso poderia vazar
+  // holdout. Se uma faixa não tiver modelo aberto, a configuração está errada.
+  if (!bucket.length) {
+    throw new Error(`Sem modelo treinável disponível na faixa ${tier}`);
+  }
 
   // Evita repetir o modelo anterior e o que já domina a janela recente.
   const ceiling = TRANSFER_CONFIG.templateShareCeiling;
