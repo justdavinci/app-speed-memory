@@ -21,6 +21,10 @@ export function createControl() {
   let aborted = false;
   let resumed = false;
   let resumeWaiters = [];
+  // Quem estiver esperando o usuário (uma resposta, um resumo) precisa ser
+  // avisado do encerramento: sem isso a promessa nunca resolve e a sessão
+  // fica pendurada com o overlay na tela.
+  let abortWaiters = [];
   return {
     get aborted() { return aborted; },
     get paused() { return paused; },
@@ -41,6 +45,16 @@ export function createControl() {
     abort() {
       aborted = true;
       this.resume();
+      const waiters = abortWaiters;
+      abortWaiters = [];
+      waiters.forEach((fn) => fn());
+    },
+
+    /** Avisa quando a sessão for encerrada. Devolve como cancelar o aviso. */
+    onAbort(fn) {
+      if (aborted) { fn(); return () => {}; }
+      abortWaiters.push(fn);
+      return () => { abortWaiters = abortWaiters.filter((f) => f !== fn); };
     },
     waitWhilePaused() {
       if (!paused) return Promise.resolve();
