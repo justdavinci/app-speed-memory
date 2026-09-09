@@ -131,6 +131,9 @@ export async function runModuleBlock(block, view, control, opts = {}) {
 
   const budget = blockBudget(block, moduleId);
   const stimulus = block.stimulus || spec.defaultStimulus;
+  // Módulos com estado próprio de bloco (o Real World Transfer guarda o motor
+  // de novidade aqui) recebem um contexto criado uma vez e repassado adiante.
+  const context = mod.beginBlock?.({ block, moduleId, settings, difficulty, rng, adaptive }) || null;
   const trials = [];
   const startedAt = new Date().toISOString();
   const startMs = performance.now();
@@ -157,7 +160,7 @@ export async function runModuleBlock(block, view, control, opts = {}) {
     }
 
     const trialIndex = trials.length;
-    const trial = mod.generate({ difficulty, stimulus, rng, settings, trialIndex });
+    const trial = mod.generate({ difficulty, stimulus, rng, settings, trialIndex, context });
     trial.moduleId = moduleId;
     trial.difficultyState = { ...difficulty };
 
@@ -180,7 +183,7 @@ export async function runModuleBlock(block, view, control, opts = {}) {
     }
     if (outcome.aborted) break;
 
-    const result = mod.score(trial, outcome.response);
+    const result = mod.score(trial, outcome.response, context);
     const exposure = outcome.timing.actualMs || trial.exposureMs;
     const throughput = calculateThroughput({
       correctItems: result.correct,
@@ -212,11 +215,17 @@ export async function runModuleBlock(block, view, control, opts = {}) {
 
     const saved = store.recordTrial(moduleId, record);
     if (saved.beaten.length) personalBests += 1;
+    mod.onTrialRecorded?.({ trial, result, record, context });
     opts.onTrial?.(record, result);
 
     trialsSinceChange += 1;
     if (adaptive) {
-      const decision = evaluate(moduleId, { state: difficulty, cursor, calibrating, trialsSinceChange }, trials);
+      const decision = evaluate(
+        moduleId,
+        { state: difficulty, cursor, calibrating, trialsSinceChange },
+        trials,
+        { order: mod.escalationOrder?.({ context, trials, difficulty }) || null },
+      );
       calibrating = decision.calibrating;
       if (decision.changed) {
         difficulty = decision.state;
@@ -255,6 +264,7 @@ export async function runModuleBlock(block, view, control, opts = {}) {
   function finish() {
     const summary = summarizeTrials(trials);
     const completedAt = new Date().toISOString();
+    const extra = mod.finishBlock?.({ context, trials, difficulty, adaptive }) || null;
     const recalibration = adaptive ? needsRecalibration(store.getTrials(moduleId)) : null;
     if (recalibration) {
       const moved = step(moduleId, difficulty, recalibration, cursor);
@@ -274,6 +284,7 @@ export async function runModuleBlock(block, view, control, opts = {}) {
       personalBests,
       protocolVersion: mod.protocolVersion || null,
       ...summary,
+      ...(extra ? { transfer: extra } : {}),
     };
   }
 }

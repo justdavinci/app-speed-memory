@@ -7,6 +7,8 @@
 import { DEFAULT_ROUTINE, DEFAULT_TRY_HARD_SETTINGS, MODULE_SPECS, TRY_HARD_CONFIG } from './config.js';
 import { initialState } from './difficulty.js';
 import { calculatePersonalBests, calculateRollingPerformance } from './metrics.js';
+import { DEFAULT_TRANSFER_SETTINGS, TRANSFER_CONFIG } from './transfer/config.js';
+import { trainedTemplateKeys, transferReport } from './transfer/metrics.js';
 
 const KEY = 'speedmemory.tryhard.v1';
 const SESSION_LIMIT = 200;
@@ -49,6 +51,19 @@ function emptyData() {
     daily: {},
     trials: {},
     streak: { current: 0, longest: 0, lastDate: null },
+    transfer: emptyTransfer(),
+  };
+}
+
+/** Estado do Real World Transfer: ajustes, log próprio e benchmarks. */
+function emptyTransfer() {
+  return {
+    version: TRANSFER_CONFIG.version,
+    templateVersion: TRANSFER_CONFIG.templateVersion,
+    settings: { ...DEFAULT_TRANSFER_SETTINGS },
+    tier: 0,
+    trials: [],
+    benchmarks: [],
   };
 }
 
@@ -65,6 +80,13 @@ export function load() {
       ...(saved.settings?.stimulusTypes || {}),
     };
     if (!Array.isArray(data.routines) || !data.routines.length) data.routines = emptyData().routines;
+    data.transfer = { ...emptyTransfer(), ...(saved.transfer || {}) };
+    data.transfer.settings = { ...DEFAULT_TRANSFER_SETTINGS, ...(saved.transfer?.settings || {}) };
+    // Modelos mudam entre versões: o log antigo não descreve o material atual.
+    if (data.transfer.templateVersion !== TRANSFER_CONFIG.templateVersion) {
+      data.transfer.trials = [];
+      data.transfer.templateVersion = TRANSFER_CONFIG.templateVersion;
+    }
     cache = data;
   } catch (_) {
     cache = emptyData();
@@ -398,6 +420,103 @@ export function getComparisons(moduleId) {
     average30: mean(previous.slice(-30), 'throughput'),
     accuracy7: mean(previous.slice(-7), 'accuracy'),
   };
+}
+
+/* -------------------------- Real World Transfer ------------------------- */
+
+export function getTransferSettings() {
+  return load().transfer.settings;
+}
+
+export function updateTransferSettings(patch) {
+  const data = load();
+  data.transfer.settings = { ...data.transfer.settings, ...patch };
+  return save(data).transfer.settings;
+}
+
+/** Faixa alcançada. Vive fora do estado de dificuldade porque atravessa blocos. */
+export function getTransferTier() {
+  return load().transfer.tier || 0;
+}
+
+export function setTransferTier(tier) {
+  const data = load();
+  data.transfer.tier = Math.max(0, Math.round(tier));
+  save(data);
+  return data.transfer.tier;
+}
+
+function compactTransferTrial(trial) {
+  return {
+    t: trial.timestamp,
+    f: trial.familyId,
+    p: trial.templateId,
+    r: trial.tier,
+    n: trial.novel ? 1 : 0,
+    h: trial.holdout ? 1 : 0,
+    a: Math.round((trial.accuracy ?? 0) * 1000) / 1000,
+    e: trial.exposureMs ? Math.round(trial.exposureMs * 10) / 10 : null,
+    q: trial.queryComplexity || 1,
+    k: trial.queryKinds || [],
+    m: trial.mode || 'training',
+    iv: trial.invalid ? 1 : 0,
+  };
+}
+
+function expandTransferTrial(t) {
+  return {
+    timestamp: t.t,
+    familyId: t.f,
+    templateId: t.p,
+    tier: t.r,
+    novel: !!t.n,
+    holdout: !!t.h,
+    accuracy: t.a,
+    exposureMs: t.e,
+    queryComplexity: t.q,
+    queryKinds: t.k || [],
+    mode: t.m || 'training',
+    invalid: !!t.iv,
+  };
+}
+
+/** Registra uma tentativa de transferência no log próprio. */
+export function recordTransferTrial(trial) {
+  const data = load();
+  const log = data.transfer.trials;
+  log.push(compactTransferTrial(trial));
+  if (log.length > TRANSFER_CONFIG.maxStoredTransferTrials) {
+    log.splice(0, log.length - TRANSFER_CONFIG.maxStoredTransferTrials);
+  }
+  save(data);
+  return trial;
+}
+
+export function getTransferTrials() {
+  return load().transfer.trials.map(expandTransferTrial);
+}
+
+/** Modelos que a pessoa já treinou — o que o motor de novidade considera visto. */
+export function getTrainedTemplateKeys() {
+  return trainedTemplateKeys(getTransferTrials());
+}
+
+export function getTransferReport() {
+  return transferReport(getTransferTrials(), { tier: getTransferTier() });
+}
+
+export function addTransferBenchmark(record) {
+  const data = load();
+  data.transfer.benchmarks.push(record);
+  if (data.transfer.benchmarks.length > TRANSFER_CONFIG.maxStoredBenchmarks) {
+    data.transfer.benchmarks.splice(0, data.transfer.benchmarks.length - TRANSFER_CONFIG.maxStoredBenchmarks);
+  }
+  save(data);
+  return record;
+}
+
+export function getTransferBenchmarks() {
+  return load().transfer.benchmarks;
 }
 
 /** Tudo do Try Hard, para entrar na exportação geral do app. */

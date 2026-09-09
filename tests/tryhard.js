@@ -69,8 +69,8 @@ export function register({ test, group }) {
     assert.equal(Object.keys(MODULES).length, MODULE_IDS.length);
   });
 
-  test('a rotina padrão soma 40 minutos em 6 exercícios', () => {
-    assert.equal(DEFAULT_ROUTINE.modules.length, 6);
+  test('a rotina padrão soma 40 minutos em 7 exercícios', () => {
+    assert.equal(DEFAULT_ROUTINE.modules.length, 7);
     assert.equal(DEFAULT_ROUTINE.modules.reduce((a, m) => a + m.minutes, 0), 40);
     for (const block of DEFAULT_ROUTINE.modules) {
       assert.ok(MODULE_SPECS[block.moduleId], `módulo desconhecido na rotina: ${block.moduleId}`);
@@ -435,16 +435,20 @@ export function register({ test, group }) {
   group('Try Hard — módulos');
 
   test('cada módulo gera uma tentativa coerente e corrige o acerto total', () => {
+    store.setBackendForTesting();
     const rng = seeded(8);
     for (const id of MODULE_IDS) {
       const mod = getModule(id);
       const spec = MODULE_SPECS[id];
+      // Módulos com estado de bloco recebem o contexto que o runner cria.
+      const context = mod.beginBlock?.({ moduleId: id, settings: {}, difficulty: initialState(id), rng }) || null;
       const trial = mod.generate({
         difficulty: initialState(id),
         stimulus: spec.defaultStimulus,
         rng,
         settings: { masking: true },
         trialIndex: 0,
+        context,
       });
       assert.ok(trial.expected.length > 0, `${id}: sem resposta esperada`);
       assert.equal(trial.totalItems, trial.expected.length, `${id}: contagem de itens inconsistente`);
@@ -521,7 +525,7 @@ export function register({ test, group }) {
   test('a primeira visita traz rotina padrão e módulos em calibração', () => {
     store.setBackendForTesting();
     const routine = store.getActiveRoutine();
-    assert.equal(routine.modules.length, 6);
+    assert.equal(routine.modules.length, 7);
     const skill = store.getSkill('partial-report');
     assert.ok(skill.calibrating);
     assert.deepEqual(skill.state, initialState('partial-report'));
@@ -574,7 +578,7 @@ export function register({ test, group }) {
     assert.equal(store.getActiveRoutine().modules.length, 1);
     store.restoreDefaultRoutine();
     assert.equal(store.getActiveRoutine().id, 'default');
-    assert.equal(store.getActiveRoutine().modules.length, 6);
+    assert.equal(store.getActiveRoutine().modules.length, 7);
   });
 
   test('a sequência de dias conta treinos consecutivos', () => {

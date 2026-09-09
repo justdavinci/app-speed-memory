@@ -69,7 +69,7 @@ Uma área separada, para quem quer treinar percepção visual a sério. O treino
 comum continua igual: Try Hard é adicional, com motor próprio de dificuldade,
 temporização e estatísticas.
 
-**Sete exercícios e um benchmark**
+**Nove exercícios e dois benchmarks**
 
 | Módulo | O que treina |
 | --- | --- |
@@ -80,9 +80,12 @@ temporização e estatísticas.
 | Peripheral Fixation | Perceber itens ao redor sem largar o ponto de fixação central. |
 | Abstract Flash | Memória visual com símbolos sem nome fácil, reduzindo o apoio verbal. |
 | Visual Threshold | Discriminar orientação com contraste e tamanho reduzidos. |
+| Real World Transfer | Levar a habilidade para fora do formato de treino: listas, interfaces, documentos, mapas e cenas. |
+| Modo Caos | Tudo muda a cada exposição — formato, quantidade, pergunta e formato de resposta. |
 | Daily Benchmark | Protocolo fixo de 20 tentativas para comparar dias diferentes. |
+| Transfer Benchmark | Protocolo fixo de 18 tentativas em material reservado, que nunca aparece no treino. |
 
-**Rotina diária editável.** A padrão soma 40 minutos em 6 exercícios. Dá para
+**Rotina diária editável.** A padrão soma 40 minutos em 7 exercícios. Dá para
 adicionar, remover, reordenar, mudar duração, dificuldade inicial e tipo de
 estímulo, e restaurar a original. A sessão encadeia os exercícios sem voltar ao
 menu, com resumo entre um e outro.
@@ -113,6 +116,64 @@ treino e tentativas; gráficos por módulo com filtros de 7, 30, 90 dias e tudo;
 comparação com ontem e com as médias recentes; calendário de consistência; e
 recordes com critério — exposição só vira recorde com pelo menos 80% de
 precisão.
+
+## Real World Transfer
+
+O risco de qualquer treino perceptivo é a pessoa ficar boa **no treino** em vez
+de ficar boa em perceber. Esta parte do Try Hard existe para evitar isso: quanto
+melhor você fica no material artificial, menos artificial o material fica.
+
+**Uma escada de sete faixas.** O treino começa em símbolos soltos e vai
+avançando conforme você acompanha:
+
+| Faixa | Material |
+| --- | --- |
+| 0 | Símbolos: dígitos, letras e formas sem contexto |
+| 1 | Informação estruturada: preços, placares, fichas |
+| 2 | Interfaces: painéis, listas, abas, chaves e contadores |
+| 3 | Documentos: recibos, tabelas, crachás, bilhetes, formulários |
+| 4 | Mapas e diagramas: nós, ligações e legenda |
+| 5 | Cenas: objetos posicionados, com cor e estado |
+| 6 | Misturado: formatos diferentes na mesma exposição |
+
+**A pergunta vem depois.** A cena aparece, some, e só então você descobre o que
+será cobrado. As perguntas nascem do conteúdo da cena — valor, rótulo, estado,
+posição, vizinhança, contagem, extremo, comparação, presença e ausência —, então
+não há "o que costuma cair". A única estratégia que funciona é captar a cena.
+
+**Material reservado.** Alguns modelos de cada família **nunca aparecem em
+treino**: eles só entram como medida. É contra eles que dá para dizer se a
+habilidade transferiu, em vez de medir prática no mesmo material.
+
+**Lacuna de transferência.** As tentativas ficam separadas em dois lados —
+material já treinado e material novo. A diferença de acerto entre os dois é a
+lacuna. Ela governa a adaptação:
+
+- lacuna pequena → **aperta o tempo**: menos exposição, mais informação na cena,
+  mais atraso até a pergunta, mais interferência;
+- lacuna grande → **varia o material**: mais contexto diferente, faixa mais alta,
+  formatos de resposta variados, perguntas mais profundas.
+
+Ou seja: acelerar só é permitido enquanto a habilidade estiver acompanhando o
+material novo. A faixa também só sobe com bom desempenho em material inédito.
+
+**Anti-repetição.** O sorteio nunca repete o modelo anterior, nenhum modelo passa
+de ~35% da janela recente, e a aparência da mesma cena muda a cada exposição
+(paleta, alinhamento, densidade, ordem, escala) — mais ainda quando o modelo
+insiste em aparecer.
+
+**Painel "Mundo real".** Mostra o Índice de Mundo Real (0 a 1000, combinando
+acerto em material novo, variedade de formatos, faixa alcançada, velocidade e
+profundidade das perguntas), a lacuna, o índice de generalização, o desempenho
+por formato, o que o motor está fazendo agora e por quê. Quando o desempenho
+fica preso ao material treinado, o painel diz isso e o currículo passa a variar
+mais em vez de encurtar o tempo. Como o Iconic Throughput, são índices internos
+do app — não medidas científicas validadas.
+
+**Pressão ajustável.** Quatro presets — Velocidade pura, Equilibrado, Máxima
+transferência e Manual — deslocam faixa, fração de material inédito e
+profundidade das perguntas. Dá para travar a faixa, se você quiser ficar em um
+tipo de material.
 
 ## Níveis
 
@@ -177,7 +238,7 @@ início" instala o app, que passa a funcionar offline.
 npm test
 ```
 
-144 testes sem dependências cobrindo as partes puras: geradores, concordância das
+183 testes sem dependências cobrindo as partes puras: geradores, concordância das
 frases, correção com e sem ordem, motor da sessão, escala de exposição, as duas
 escalas de nível, sorteio do intervalo, migração de ajustes antigos,
 estatísticas e a escada adaptativa — esta última verificada com pessoas
@@ -189,8 +250,17 @@ Do Try Hard, os testes cobrem o motor de dificuldade (sobe, desce, não oscila,
 respeita limites e o intervalo mínimo entre mudanças), o cálculo de precisão,
 throughput e consistência, os geradores (máscara que não vaza a resposta,
 benchmark sem sequências compressíveis, posições periféricas dentro da área),
-os oito módulos, a persistência e a sessão inteira — iniciada, pausada,
+os módulos, a persistência e a sessão inteira — iniciada, pausada,
 encerrada e salva — rodando com uma interface falsa, sem navegador.
+
+Do Real World Transfer, os testes conferem que toda família gera cena desenhável
+com elementos identificáveis e sem colisão de células, que todo modelo produz
+pergunta respondível e corrigível, que o enunciado nunca aparece durante a
+exposição, que o material reservado nunca entra no conjunto treinado, que o
+sorteio não repete nem deixa um modelo dominar a janela, que a lacuna só é
+calculada com tentativas dos dois lados, que o sobreajuste é detectado, que a
+faixa só sobe com desempenho em material novo e que o eixo da adaptação muda
+conforme a lacuna.
 
 ## Como as frases são geradas
 
@@ -210,7 +280,7 @@ Frase aleatória com número exato de palavras é um problema de encaixe:
 ## Estrutura
 
 ```
-index.html                     telas (treinar, teste, histórico, resultado, ajustes)
+index.html                     telas (treinar, teste, Try Hard, histórico, resultado, ajustes)
 assets/css/styles.css          estilo único, tema claro e escuro
 assets/js/
   app.js                       interface: navegação, condução do treino e do teste
@@ -230,8 +300,17 @@ assets/js/
     store.js                   rotinas, sessões, tentativas e agregados
     runner.js                  ciclo de tentativa e encadeamento da sessão
     view.js                    desenho do estímulo e widgets de resposta
-    ui.js                      telas de treino, módulos, progresso e config
-    modules/                   os oito exercícios
+    ui.js                      telas de treino, módulos, mundo real, progresso e config
+    modules/                   os exercícios e os dois benchmarks
+    transfer/
+      config.js                faixas, presets e limiares de transferência
+      scene.js                 esquema comum de cena (elementos com rótulo, valor, estado, posição)
+      queries.js               geração e correção das perguntas feitas depois da exposição
+      novelty.js               sorteio anti-repetição e material reservado
+      metrics.js               lacuna, generalização, Índice de Mundo Real, sobreajuste
+      adapt.js                 decide entre apertar o tempo e variar o material
+      vocab.js                 vocabulário das cenas
+      families/                as sete famílias de estímulo, do símbolo à cena
   util.js                      utilidades (sorteio, normalização de texto, formatação)
   generators/
     digits.js                  sequências numéricas
