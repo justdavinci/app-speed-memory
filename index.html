@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="auto">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f17" />
+  <meta name="description" content="PiscaMemory: treine memória rápida com dígitos, palavras e frases, e acompanhe sua evolução." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PiscaMemory" />
+  <title>PiscaMemory</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar__text">
+        <h1 class="topbar__title" id="topbar-title">Treinar</h1>
+        <p class="topbar__sub" id="topbar-sub">Escolha o modo e a dificuldade</p>
+      </div>
+      <div class="topbar__badge" id="topbar-badge" hidden></div>
+    </header>
+
+    <main class="main" id="main">
+
+      <!-- ============================ TREINAR ============================ -->
+      <section class="view" id="view-train" aria-label="Configurar treino">
+        <div class="modes" role="tablist" aria-label="Modo de treino">
+          <button class="mode" role="tab" data-mode="digits" aria-selected="true">
+            <span class="mode__icon" aria-hidden="true">123</span>
+            <span class="mode__name">Dígitos</span>
+            <span class="mode__desc">Números aleatórios</span>
+          </button>
+          <button class="mode" role="tab" data-mode="words" aria-selected="false">
+            <span class="mode__icon" aria-hidden="true">Aa</span>
+            <span class="mode__name">Palavras</span>
+            <span class="mode__desc">Palavras soltas</span>
+          </button>
+          <button class="mode" role="tab" data-mode="sentence" aria-selected="false">
+            <span class="mode__icon" aria-hidden="true">“ ”</span>
+            <span class="mode__name">Frases</span>
+            <span class="mode__desc">Com sentido</span>
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="field">
+            <div class="field__head">
+              <label class="field__label" id="label-count">Dígitos por série</label>
+              <output class="field__value" id="out-count">8</output>
+            </div>
+            <div class="stepper">
+              <button class="stepper__btn" data-step="count" data-delta="-1" aria-label="Diminuir quantidade">−</button>
+              <input class="stepper__range" id="in-count" type="range" min="3" max="60" step="1" value="8"
+                     aria-labelledby="label-count" />
+              <button class="stepper__btn" data-step="count" data-delta="1" aria-label="Aumentar quantidade">+</button>
+            </div>
+            <p class="field__hint" id="hint-count">Quantos dígitos aparecem em cada série.</p>
+          </div>
+
+          <div class="field">
+            <div class="field__head">
+              <label class="field__label" id="label-exposure">Tempo de exposição</label>
+              <output class="field__value" id="out-exposure">10 s</output>
+            </div>
+            <div class="stepper">
+              <button class="stepper__btn" data-step="exposure" data-delta="-1" aria-label="Diminuir tempo">−</button>
+              <input class="stepper__range" id="in-exposure" type="range" min="0" max="42" step="1" value="32"
+                     aria-labelledby="label-exposure" />
+              <button class="stepper__btn" data-step="exposure" data-delta="1" aria-label="Aumentar tempo">+</button>
+            </div>
+            <p class="band" id="exposure-band"></p>
+            <p class="field__hint field__hint--warn" id="hint-frame" hidden></p>
+            <div class="segmented" role="radiogroup" aria-label="Ritmo de exibição">
+              <button class="segmented__opt" data-pace="total" role="radio" aria-checked="true">Tudo de uma vez</button>
+              <button class="segmented__opt" data-pace="perItem" role="radio" aria-checked="false">Um por um</button>
+            </div>
+            <p class="field__hint" id="hint-pace">O tempo vale para a série inteira.</p>
+          </div>
+
+          <div class="field">
+            <div class="field__head">
+              <label class="field__label" id="label-interval">Intervalo antes de cada série</label>
+              <output class="field__value" id="out-interval">2 s</output>
+            </div>
+            <div class="segmented" role="radiogroup" aria-label="Tipo de intervalo">
+              <button class="segmented__opt" data-interval-mode="fixed" role="radio" aria-checked="true">Fixo</button>
+              <button class="segmented__opt" data-interval-mode="random" role="radio" aria-checked="false">Aleatório</button>
+            </div>
+
+            <div class="stepper" id="interval-fixed">
+              <button class="stepper__btn" data-step="interval" data-delta="-1" aria-label="Diminuir intervalo">−</button>
+              <input class="stepper__range" id="in-interval" type="range" min="0" max="15000" step="500" value="2000"
+                     aria-labelledby="label-interval" />
+              <button class="stepper__btn" data-step="interval" data-delta="1" aria-label="Aumentar intervalo">+</button>
+            </div>
+
+            <div class="range-pair" id="interval-random" hidden>
+              <label class="range-pair__row">
+                <span>Mínimo</span>
+                <input class="stepper__range" id="in-interval-min" type="range" min="0" max="15000" step="500" value="2000" />
+                <output id="out-interval-min">2 s</output>
+              </label>
+              <label class="range-pair__row">
+                <span>Máximo</span>
+                <input class="stepper__range" id="in-interval-max" type="range" min="0" max="15000" step="500" value="10000" />
+                <output id="out-interval-max">10 s</output>
+              </label>
+            </div>
+
+            <label class="switch">
+              <span>
+                <strong>Mostrar a contagem</strong>
+                <small>Desligada, a série aparece de surpresa.</small>
+              </span>
+              <input type="checkbox" id="sw-countdown" checked />
+              <span class="switch__track" aria-hidden="true"></span>
+            </label>
+            <p class="field__hint" id="hint-interval">Espera entre tocar em “Próxima série” e a próxima exposição.</p>
+          </div>
+
+          <div class="field">
+            <div class="field__head">
+              <label class="field__label" id="label-series">Séries por sessão</label>
+              <output class="field__value" id="out-series">10</output>
+            </div>
+            <div class="stepper">
+              <button class="stepper__btn" data-step="series" data-delta="-1" aria-label="Diminuir séries">−</button>
+              <input class="stepper__range" id="in-series" type="range" min="1" max="20" step="1" value="10"
+                     aria-labelledby="label-series" />
+              <button class="stepper__btn" data-step="series" data-delta="1" aria-label="Aumentar séries">+</button>
+            </div>
+            <p class="field__hint">Padrão: sessões de 10 séries.</p>
+          </div>
+
+          <div class="field">
+            <label class="switch">
+              <span>
+                <strong>Posição aleatória</strong>
+                <small>A sequência aparece em um ponto sorteado da tela, não no centro.</small>
+              </span>
+              <input type="checkbox" id="sw-position" />
+              <span class="switch__track" aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <div class="field" id="field-order" hidden>
+            <div class="field__head">
+              <label class="field__label">Ordem das palavras</label>
+            </div>
+            <div class="segmented" role="radiogroup" aria-label="Ordem das palavras">
+              <button class="segmented__opt" data-order="1" role="radio" aria-checked="true">Na ordem</button>
+              <button class="segmented__opt" data-order="0" role="radio" aria-checked="false">Ordem livre</button>
+            </div>
+            <p class="field__hint" id="hint-order">Cada palavra precisa estar na posição certa.</p>
+          </div>
+
+          <div class="field" id="field-group">
+            <div class="field__head">
+              <label class="field__label">Agrupar dígitos</label>
+            </div>
+            <div class="segmented" role="radiogroup" aria-label="Agrupamento dos dígitos">
+              <button class="segmented__opt" data-group="0" role="radio" aria-checked="false">Sem</button>
+              <button class="segmented__opt" data-group="2" role="radio" aria-checked="false">2 em 2</button>
+              <button class="segmented__opt" data-group="3" role="radio" aria-checked="true">3 em 3</button>
+              <button class="segmented__opt" data-group="4" role="radio" aria-checked="false">4 em 4</button>
+            </div>
+            <p class="field__hint">Blocos ajudam a memorizar por “pedaços”.</p>
+          </div>
+        </div>
+
+        <p class="estimate" id="estimate"></p>
+        <button class="btn btn--primary btn--lg" id="btn-start">Iniciar sessão</button>
+
+        <div class="card card--soft" id="last-summary" hidden>
+          <h2 class="card__title">Seu último treino neste modo</h2>
+          <div class="tiles" id="last-tiles"></div>
+        </div>
+      </section>
+
+      <!-- ============================= TESTE ============================== -->
+      <section class="view" id="view-test" aria-label="Teste de velocidade" hidden>
+        <div class="card">
+          <h2 class="card__title">Teste de velocidade</h2>
+          <p class="prose">
+            A dificuldade se ajusta a você a cada série: acertou duas seguidas, o tempo
+            encurta ou entra mais um item; errou, a série afrouxa. O teste encontra o seu
+            limite e te coloca em um nível.
+          </p>
+          <ul class="facts">
+            <li><strong>Até 30 séries</strong>, entre 3 e 5 minutos.</li>
+            <li><strong>Tempo e quantidade</strong> se adaptam juntos, alternando a cada passo.</li>
+            <li><strong>Sem contagem</strong>: a espera é sorteada e a série aparece de surpresa.</li>
+            <li>Responda o que conseguiu; <strong>chutar não atrapalha</strong>.</li>
+          </ul>
+
+          <div class="segmented" role="radiogroup" aria-label="Tipo de estímulo">
+            <button class="segmented__opt" data-test-mode="digits" role="radio" aria-checked="true">4 dígitos</button>
+            <button class="segmented__opt" data-test-mode="words" role="radio" aria-checked="false">3 palavras</button>
+          </div>
+
+          <button class="btn btn--primary btn--lg" id="btn-test-start">Começar o teste</button>
+          <p class="field__hint" id="test-floor-hint"></p>
+        </div>
+
+        <div class="card" id="test-last-card" hidden>
+          <h2 class="card__title">Seus níveis</h2>
+          <div class="levels-grid" id="test-levels"></div>
+          <p class="field__hint" id="test-average-hint"></p>
+          <h3 class="section-title">Testes anteriores</h3>
+          <div id="test-history" class="history-list"></div>
+        </div>
+      </section>
+
+      <!-- ====================== RESULTADO DO TESTE ======================= -->
+      <section class="view" id="view-test-result" aria-label="Resultado do teste" hidden>
+        <div class="level level--big" id="test-result-level"></div>
+        <p class="result-hero__sub" id="test-result-note"></p>
+
+        <div class="tiles" id="test-result-tiles"></div>
+
+        <div class="card">
+          <h2 class="card__title">Como você foi em cada dificuldade</h2>
+          <div id="test-curve" class="curve"></div>
+          <p class="chart__caption">
+            Cada linha é uma combinação de quantidade e tempo por que o teste passou.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2 class="card__title">A escala completa</h2>
+          <div class="bands" id="test-band-table"></div>
+        </div>
+
+        <div class="row row--wrap">
+          <button class="btn btn--primary" id="btn-test-again">Refazer o teste</button>
+          <button class="btn btn--ghost" id="btn-test-to-train">Treinar nesse tempo</button>
+        </div>
+      </section>
+
+      <!-- =========================== HISTÓRICO =========================== -->
+      <section class="view" id="view-history" aria-label="Histórico" hidden>
+        <div class="chips" role="tablist" aria-label="Filtrar por modo">
+          <button class="chip is-active" data-filter="all" role="tab" aria-selected="true">Tudo</button>
+          <button class="chip" data-filter="digits" role="tab" aria-selected="false">Dígitos</button>
+          <button class="chip" data-filter="words" role="tab" aria-selected="false">Palavras</button>
+          <button class="chip" data-filter="sentence" role="tab" aria-selected="false">Frases</button>
+        </div>
+
+        <div class="tiles" id="stat-tiles"></div>
+
+        <div class="card">
+          <h2 class="card__title">Evolução da precisão</h2>
+          <div class="chart" id="chart-accuracy"></div>
+          <p class="chart__caption" id="chart-caption">Toque em um ponto para ver os detalhes.</p>
+        </div>
+
+        <div class="card">
+          <h2 class="card__title">Itens memorizados por sessão</h2>
+          <div class="chart chart--bars" id="chart-items"></div>
+        </div>
+
+        <div class="card">
+          <h2 class="card__title">Seus níveis</h2>
+          <p class="prose">
+            O nível vem da <strong>série mais difícil que você acertou inteira</strong>,
+            juntando tempo e quantidade. Dígitos e palavras têm escalas separadas, porque
+            ler custa mais que ver.
+          </p>
+          <div class="levels-grid" id="levels-by-mode"></div>
+
+          <div class="segmented" role="radiogroup" aria-label="Régua exibida">
+            <button class="segmented__opt" data-scale="digits" role="radio" aria-checked="true">Régua dos dígitos</button>
+            <button class="segmented__opt" data-scale="words" role="radio" aria-checked="false">Régua das palavras</button>
+          </div>
+          <p class="field__hint" id="scale-hint"></p>
+          <div class="bands" id="band-table"></div>
+          <p class="chart__caption">
+            Os tempos são convertidos para uma carga de referência: 8 dígitos em 100 ms
+            valem o mesmo que 4 dígitos em 50 ms.
+          </p>
+        </div>
+
+        <h2 class="section-title">Sessões</h2>
+        <div id="history-list" class="history-list"></div>
+
+        <div class="row row--wrap" id="history-actions">
+          <button class="btn btn--ghost" id="btn-export">Exportar dados</button>
+          <button class="btn btn--ghost" id="btn-import">Importar dados</button>
+          <button class="btn btn--danger-ghost" id="btn-clear">Apagar histórico</button>
+          <input type="file" id="file-import" accept="application/json" hidden />
+        </div>
+      </section>
+
+      <!-- =========================== RESULTADO =========================== -->
+      <section class="view" id="view-results" aria-label="Resultado da sessão" hidden>
+        <div class="result-hero">
+          <div class="ring" id="result-ring" style="--p:0">
+            <span class="ring__value" id="result-accuracy">0%</span>
+            <span class="ring__label">precisão</span>
+          </div>
+          <p class="result-hero__title" id="result-title"></p>
+          <p class="result-hero__sub" id="result-sub"></p>
+        </div>
+
+        <div class="tiles" id="result-tiles"></div>
+
+        <div class="card">
+          <h2 class="card__title">Série a série</h2>
+          <div id="result-series" class="series-list"></div>
+        </div>
+
+        <div class="row row--wrap">
+          <button class="btn btn--primary" id="btn-again">Treinar de novo</button>
+          <button class="btn btn--ghost" id="btn-harder">Aumentar dificuldade</button>
+          <button class="btn btn--ghost" id="btn-to-history">Ver histórico</button>
+        </div>
+      </section>
+
+      <!-- =========================== AJUSTES ============================= -->
+      <section class="view" id="view-settings" aria-label="Ajustes" hidden>
+        <div class="card">
+          <h2 class="card__title">Aparência</h2>
+          <div class="segmented" role="radiogroup" aria-label="Tema">
+            <button class="segmented__opt" data-theme-opt="auto" role="radio" aria-checked="true">Automático</button>
+            <button class="segmented__opt" data-theme-opt="dark" role="radio" aria-checked="false">Escuro</button>
+            <button class="segmented__opt" data-theme-opt="light" role="radio" aria-checked="false">Claro</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card__title">Correção</h2>
+          <label class="switch">
+            <span>
+              <strong>Exigir acentuação correta</strong>
+              <small>Desligado, “coracao” vale por “coração”.</small>
+            </span>
+            <input type="checkbox" id="sw-accents" />
+            <span class="switch__track" aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <div class="card">
+          <h2 class="card__title">Durante o treino</h2>
+          <label class="switch">
+            <span>
+              <strong>Som</strong>
+              <small>Bipe no início e no fim da exposição.</small>
+            </span>
+            <input type="checkbox" id="sw-sound" checked />
+            <span class="switch__track" aria-hidden="true"></span>
+          </label>
+          <label class="switch">
+            <span>
+              <strong>Vibração</strong>
+              <small>Retorno tátil no acerto e no erro.</small>
+            </span>
+            <input type="checkbox" id="sw-haptics" checked />
+            <span class="switch__track" aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <div class="card card--soft">
+          <h2 class="card__title">PiscaMemory</h2>
+          <p class="prose">
+            Seus treinos ficam salvos apenas neste aparelho e não são enviados a
+            servidor nenhum. Use “Adicionar à tela de início” para instalar e treinar
+            offline.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <nav class="tabbar" id="tabbar" role="tablist" aria-label="Navegação">
+      <button class="tab is-active" data-view="train" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8v8M19 8v8" /></svg>
+        <span>Treinar</span>
+      </button>
+      <button class="tab" data-view="test" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 13V9M9 2h6" /></svg>
+        <span>Teste</span>
+      </button>
+      <button class="tab" data-view="history" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M8 16V9M12 16v-5M16 16V7" /></svg>
+        <span>Histórico</span>
+      </button>
+      <button class="tab" data-view="settings" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" /></svg>
+        <span>Ajustes</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ============================== TREINO ============================== -->
+  <div class="play" id="play" hidden aria-live="polite">
+    <div class="play__bar">
+      <button class="icon-btn" id="btn-quit" aria-label="Sair do treino">✕</button>
+      <div class="play__progress" id="play-progress"></div>
+      <span class="play__counter" id="play-counter">1/10</span>
+    </div>
+
+    <!-- Preparação -->
+    <div class="stage" id="stage-ready">
+      <p class="stage__kicker" id="ready-kicker">Série 1 de 10</p>
+      <div class="countdown" id="countdown">3</div>
+      <p class="stage__hint" id="ready-hint">Prepare-se…</p>
+    </div>
+
+    <!-- Memorização -->
+    <div class="stage" id="stage-memorize" hidden>
+      <div class="timer-wrap" id="timer-wrap">
+        <div class="timer">
+          <div class="timer__fill" id="timer-fill"></div>
+        </div>
+        <div class="timer__label"><span id="timer-left">10,0</span>s</div>
+      </div>
+      <div class="content" id="content"></div>
+      <button class="btn btn--ghost" id="btn-ready">Já memorizei</button>
+    </div>
+
+    <!-- Digitação -->
+    <div class="stage" id="stage-recall" hidden>
+      <p class="stage__kicker" id="recall-kicker">Digite o que você memorizou</p>
+
+      <div class="answer" id="answer-digits" hidden>
+        <div class="answer__display" id="digits-display" aria-live="polite"></div>
+        <p class="answer__count"><span id="digits-count">0</span> de <span id="digits-total">8</span></p>
+        <div class="keypad" id="keypad">
+          <button class="key" data-key="1">1</button>
+          <button class="key" data-key="2">2</button>
+          <button class="key" data-key="3">3</button>
+          <button class="key" data-key="4">4</button>
+          <button class="key" data-key="5">5</button>
+          <button class="key" data-key="6">6</button>
+          <button class="key" data-key="7">7</button>
+          <button class="key" data-key="8">8</button>
+          <button class="key" data-key="9">9</button>
+          <button class="key key--util" data-key="back" aria-label="Apagar">⌫</button>
+          <button class="key" data-key="0">0</button>
+          <button class="key key--ok" data-key="ok" aria-label="Confirmar">✓</button>
+        </div>
+      </div>
+
+      <div class="answer" id="answer-text" hidden>
+        <textarea id="text-input" class="answer__textarea" rows="4"
+                  autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+                  placeholder="Separe por espaço ou vírgula"></textarea>
+        <p class="answer__count"><span id="words-count">0</span> de <span id="words-total">5</span> palavras</p>
+        <button class="btn btn--primary btn--lg" id="btn-confirm">Confirmar</button>
+      </div>
+    </div>
+
+    <!-- Correção -->
+    <div class="stage" id="stage-feedback" hidden>
+      <p class="feedback__headline" id="feedback-headline"></p>
+      <div class="diff" id="diff"></div>
+      <button class="btn btn--primary btn--lg" id="btn-next">Próxima série</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <dialog class="dialog" id="dialog">
+    <h2 class="dialog__title" id="dialog-title"></h2>
+    <p class="dialog__text" id="dialog-text"></p>
+    <div class="row">
+      <button class="btn btn--ghost" id="dialog-cancel">Cancelar</button>
+      <button class="btn btn--danger" id="dialog-ok">Confirmar</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
