@@ -811,6 +811,9 @@ tryhard.register({ test, group, assert });
 const transfer = await import('./transfer.js');
 transfer.register({ test, group, assert });
 
+const availability = await import('./availability.js');
+availability.register({ test, group, assert });
+
 /* -------------------------------- fecho --------------------------------- */
 
 console.log(`\n${passed} testes passaram, ${failed} falharam.`);
