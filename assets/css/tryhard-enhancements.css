@@ -1,0 +1,151 @@
+/* Enhancements específicos do Try Hard v2: perfil funcional, retenção e desktop. */
+
+.th-keyboard-hint {
+  display: none;
+  font-size: .72rem;
+  color: var(--muted);
+  align-self: center;
+  margin-inline-start: 4px;
+}
+
+.th-profile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.th-profile-composite {
+  min-width: 86px;
+  text-align: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2, rgba(127,127,127,.06));
+}
+.th-profile-composite strong { display: block; font-size: 1.65rem; line-height: 1; }
+.th-profile-composite span { display: block; margin-top: 5px; font-size: .68rem; color: var(--muted); }
+
+.th-subscore-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.th-subscore {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2, rgba(127,127,127,.045));
+}
+.th-subscore.is-empty { opacity: .72; }
+.th-subscore__top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.th-subscore__name { font-size: .78rem; font-weight: 700; }
+.th-subscore__points { font-size: 1.45rem; font-weight: 800; line-height: 1; }
+.th-subscore__bar { height: 5px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--muted) 18%, transparent); margin: 9px 0; }
+.th-subscore__bar i { display: block; width: var(--score); height: 100%; border-radius: inherit; background: var(--accent); }
+.th-subscore__raw { margin: 0; font-size: .74rem; line-height: 1.35; }
+.th-subscore__confidence { margin: 4px 0 0; font-size: .68rem; color: var(--muted); }
+.th-subscore__details { margin-top: 8px; font-size: .7rem; color: var(--muted); }
+.th-subscore__details summary { cursor: pointer; }
+.th-subscore__details p { margin: 6px 0 0; line-height: 1.45; }
+.th-profile-note { display: grid; gap: 3px; margin-top: 12px; padding: 11px 12px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.th-profile-note strong { font-size: .82rem; }
+.th-profile-note span { font-size: .74rem; color: var(--muted); line-height: 1.4; }
+
+/* A resposta precisa poder crescer sem empurrar controles para fora da viewport. */
+.th-response {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.th-actions { flex-wrap: wrap; }
+.th-options, .th-chips, .th-slots, .th-grid { max-width: 100%; }
+
+@media (min-width: 900px) {
+  .th-play__bar,
+  .th-progress,
+  .th-metrics,
+  .th-stage {
+    width: min(1120px, calc(100vw - 64px));
+    margin-inline: auto;
+  }
+
+  .th-stage {
+    padding-inline: clamp(24px, 4vw, 72px);
+  }
+
+  .th-response {
+    width: min(980px, 100%);
+    max-height: min(62vh, 680px);
+    margin-inline: auto;
+    padding: 8px 4px 18px;
+  }
+
+  .th-prompt {
+    width: min(900px, 100%);
+    margin-inline: auto;
+    font-size: clamp(1rem, 1.3vw, 1.2rem);
+  }
+
+  .th-chips {
+    gap: 9px;
+    width: min(900px, 100%);
+    margin-inline: auto;
+  }
+  .th-chip {
+    min-width: 54px;
+    min-height: 50px;
+    padding-inline: 14px;
+  }
+
+  .th-slots {
+    width: min(900px, 100%);
+    margin-inline: auto;
+    gap: 8px;
+  }
+
+  .th-grid {
+    width: min(660px, 100%);
+    margin-inline: auto;
+  }
+
+  .th-options {
+    width: min(900px, 100%);
+    margin-inline: auto;
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+    gap: 10px;
+  }
+  .th-option { min-height: 54px; }
+
+  .th-actions {
+    width: min(900px, 100%);
+    margin: 12px auto 0;
+    justify-content: center;
+  }
+
+  .th-keyboard-hint { display: inline-flex; }
+
+  .th-subscore-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1280px) {
+  .th-stage { width: min(1240px, calc(100vw - 96px)); }
+  .th-response { width: min(1080px, 100%); }
+}
+
+@media (max-width: 640px) {
+  .th-profile-head { align-items: stretch; }
+  .th-profile-composite { min-width: 74px; }
+  .th-subscore-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .th-subscore { padding: 10px; }
+  .th-subscore__name { font-size: .7rem; }
+  .th-subscore__points { font-size: 1.25rem; }
+}
+
+@media (max-width: 390px) {
+  .th-subscore-grid { grid-template-columns: 1fr; }
+}
