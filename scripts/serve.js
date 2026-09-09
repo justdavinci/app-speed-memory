@@ -36,4 +36,4 @@ createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Não encontrado');
   }
-}).listen(PORT, () => console.log(`Speed Memory em http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`PiscaMemory em http://localhost:${PORT}`));

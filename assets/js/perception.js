@@ -1,16 +1,11 @@
-// Escala de tempos de exposição e as classificações perceptuais associadas.
+// Escala de tempos de exposição e os níveis de cada tipo de estímulo.
 //
-// São DUAS réguas, porque os dois estímulos não se comparam na mesma:
+// São duas réguas, porque os dois estímulos não se comparam na mesma: ver um
+// dígito é reconhecer um caractere, ler uma palavra exige acesso ao léxico.
 //
-// - Dígitos: a régua é o tempo TOTAL de exibição da sequência. Vem da
-//   literatura de memória icônica, onde um punhado de caracteres é exposto de
-//   uma vez e a pessoa relata o que conseguiu.
-// - Palavras: a régua é o tempo POR PALAVRA. Ler exige acesso ao léxico, e a
-//   literatura de leitura mede justamente isso — duração da fixação e ritmo em
-//   apresentação serial. Normalizar por palavra deixa a medida comparável entre
-//   uma série de 3 e uma de 10 palavras.
-//
-// Ambas são referências aproximadas, em condições ideais, para situar o treino.
+// Cada régua tem uma carga de referência, e o tempo medido é convertido para
+// ela antes de virar nível. Assim quantidade e tempo entram na mesma conta:
+// 8 dígitos em 100 ms valem o mesmo que 4 dígitos em 50 ms.
 
 /**
  * Passos do seletor de exposição, em milissegundos. Finos embaixo (onde 5 ms
@@ -52,53 +47,53 @@ export function formatExposure(ms) {
  */
 export const DIGIT_BANDS = [
   {
-    id: 'limiar',
+    id: 'relampago',
     max: 10,
-    range: '5–10 ms',
-    name: 'Limiar visual',
-    text: 'Pode haver processamento visual, mas identificação consciente confiável é difícil.',
+    range: 'até 10 ms',
+    name: 'Relâmpago',
+    text: 'No limite do que a visão registra. Poucas pessoas acertam uma sequência aqui.',
   },
   {
-    id: 'identificacao',
+    id: 'faisca',
     max: 20,
     range: '10–20 ms',
-    name: 'Identificação isolada',
-    text: 'Um dígito ou estímulo simples pode às vezes ser identificado.',
+    name: 'Faísca',
+    text: 'Tempo de captar um dígito, às vezes dois, antes da imagem sumir.',
   },
   {
-    id: 'multiplo',
+    id: 'flash',
     max: 50,
     range: '20–50 ms',
-    name: 'Reconhecimento múltiplo',
-    text: 'Já pode ser suficiente para reconhecer vários caracteres em condições ideais.',
+    name: 'Flash',
+    text: 'Vários dígitos de uma vez, com a atenção bem afiada.',
   },
   {
-    id: 'iconica',
+    id: 'piscada',
     max: 100,
     range: '50–100 ms',
-    name: 'Memória icônica',
-    text: 'Faixa da duração clássica dos experimentos de memória icônica (~50 ms): cerca de 4 a 5 caracteres relatados em média.',
+    name: 'Piscada',
+    text: 'A sequência inteira cabe no tempo de uma piscada.',
   },
   {
-    id: 'codificacao',
+    id: 'olhada',
     max: 200,
     range: '100–200 ms',
-    name: 'Codificação eficiente',
-    text: 'Uma sequência curta já pode ser codificada com bastante eficiência.',
+    name: 'Olhada',
+    text: 'Tempo suficiente para registrar a sequência com folga.',
   },
   {
-    id: 'memoria',
+    id: 'vista',
     max: 500,
     range: '200–500 ms',
-    name: 'Memória e atenção',
-    text: 'A limitação começa a ser muito mais de capacidade de memória e atenção do que de percepção.',
+    name: 'Vista calma',
+    text: 'Aqui o limite deixa de ser a visão e passa a ser a memória.',
   },
   {
-    id: 'livre',
+    id: 'sempressa',
     max: Infinity,
     range: 'acima de 500 ms',
-    name: 'Leitura confortável',
-    text: 'Fora da faixa da tabela: o tempo já dá para ler à vontade e o desafio é inteiramente de memória.',
+    name: 'Sem pressa',
+    text: 'Tempo à vontade para ver: o desafio é só lembrar.',
   },
 ];
 
@@ -114,72 +109,76 @@ export const DIGIT_BANDS = [
  */
 export const WORD_BANDS = [
   {
-    id: 'lexical',
+    id: 'relampago',
     max: 35,
-    range: 'até 35 ms/palavra',
-    name: 'Limiar lexical',
-    text: 'Nesse tempo, mesmo uma palavra isolada só é identificada em condições ideais. Captar várias é improvável.',
+    range: 'até 35 ms',
+    name: 'Relâmpago',
+    text: 'Mais rápido do que a leitura costuma alcançar, mesmo com uma palavra só.',
   },
   {
-    id: 'fugaz',
+    id: 'faisca',
     max: 70,
-    range: '35–70 ms/palavra',
-    name: 'Reconhecimento fugaz',
-    text: 'Uma ou outra palavra pode ser reconhecida, mas a maior parte escapa antes de virar memória.',
+    range: '35–70 ms',
+    name: 'Faísca',
+    text: 'Uma ou outra palavra é reconhecida; a maioria escapa antes de virar memória.',
   },
   {
-    id: 'serial',
+    id: 'flash',
     max: 120,
-    range: '70–120 ms/palavra',
-    name: 'Acima da leitura veloz',
-    text: 'Mais rápido do que a compreensão costuma acompanhar em apresentação serial. Exige palavras curtas e familiares.',
+    range: '70–120 ms',
+    name: 'Flash',
+    text: 'Acima do ritmo da leitura veloz. Funciona com palavras curtas e familiares.',
   },
   {
-    id: 'veloz',
+    id: 'piscada',
     max: 200,
-    range: '120–200 ms/palavra',
-    name: 'Ritmo de leitura veloz',
-    text: 'Perto do limite de leitores rápidos e treinados, algo como 300 a 500 palavras por minuto.',
+    range: '120–200 ms',
+    name: 'Piscada',
+    text: 'Ritmo de quem lê rápido e treinado: 300 a 500 palavras por minuto.',
   },
   {
-    id: 'tipico',
+    id: 'olhada',
     max: 300,
-    range: '200–300 ms/palavra',
-    name: 'Ritmo de leitura típico',
-    text: 'Faixa da fixação média na leitura silenciosa: cerca de 200 a 300 palavras por minuto.',
+    range: '200–300 ms',
+    name: 'Olhada',
+    text: 'Ritmo de leitura corrente, entre 200 e 300 palavras por minuto.',
   },
   {
-    id: 'confortavel',
+    id: 'vista',
     max: 500,
-    range: '300–500 ms/palavra',
-    name: 'Leitura confortável',
-    text: 'Tempo de sobra para ler cada palavra e ainda começar a organizar a memorização.',
+    range: '300–500 ms',
+    name: 'Vista calma',
+    text: 'Tempo de sobra para ler cada palavra e já começar a memorizar.',
   },
   {
     id: 'sempressa',
     max: Infinity,
-    range: 'acima de 500 ms/palavra',
+    range: 'acima de 500 ms',
     name: 'Sem pressa',
-    text: 'A leitura deixou de ser o gargalo: o desafio é inteiramente de memória e estratégia.',
+    text: 'A leitura não é mais o gargalo: o desafio é memória e estratégia.',
   },
 ];
 
-/** As duas réguas, com o rótulo da unidade em que cada uma mede. */
+/**
+ * As duas réguas. `refCount` é a carga de referência: o tempo medido é
+ * convertido para ela antes de virar nível, o que deixa comparáveis séries de
+ * tamanhos diferentes.
+ */
 export const BAND_SCALES = {
   digits: {
     id: 'digits',
     label: 'Dígitos',
-    unit: 'tempo total da série',
-    unitShort: 'total',
-    perItem: false,
+    refCount: 4,
+    unit: 'tempo para 4 dígitos',
+    unitShort: 'por 4 dígitos',
     bands: DIGIT_BANDS,
   },
   words: {
     id: 'words',
     label: 'Palavras',
+    refCount: 1,
     unit: 'tempo por palavra',
     unitShort: 'por palavra',
-    perItem: true,
     bands: WORD_BANDS,
   },
 };
@@ -190,13 +189,14 @@ export function scaleForMode(mode) {
 }
 
 /**
- * Valor que a régua do modo compara: total para dígitos, por palavra para
- * estímulos verbais.
+ * Converte um tempo de exposição para a carga de referência da régua.
+ * 8 dígitos em 100 ms e 4 dígitos em 50 ms dão o mesmo valor: é assim que
+ * quantidade e tempo entram na mesma conta.
  */
 export function basisFor(mode, exposureMs, count) {
   const scale = scaleForMode(mode);
-  if (!scale.perItem) return exposureMs;
-  return count > 0 ? exposureMs / count : exposureMs;
+  if (!count || count <= 0) return exposureMs;
+  return (exposureMs * scale.refCount) / count;
 }
 
 /** Faixa dentro de uma régua. */

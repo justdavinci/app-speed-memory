@@ -562,6 +562,18 @@ button { cursor: pointer; }
   overflow-y: auto;
 }
 
+/* Posição sorteada: o estímulo vira uma caixa solta dentro da área. */
+.content--scattered {
+  display: block;
+  position: relative;
+  overflow: hidden;
+}
+.content--scattered > * {
+  position: absolute;
+  margin: 0;
+  max-width: 88%;
+}
+
 .digits {
   display: flex;
   flex-wrap: wrap;

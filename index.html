@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f17" />
-  <meta name="description" content="Treino de memória rápida: memorize dígitos, palavras ou frases e acompanhe sua evolução." />
+  <meta name="description" content="PiscaMemory: treine memória rápida com dígitos, palavras e frases, e acompanhe sua evolução." />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Speed Memory — treino de memória</title>
+  <meta name="apple-mobile-web-app-title" content="PiscaMemory" />
+  <title>PiscaMemory</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
@@ -135,6 +136,17 @@
             <p class="field__hint">Padrão: sessões de 10 séries.</p>
           </div>
 
+          <div class="field">
+            <label class="switch">
+              <span>
+                <strong>Posição aleatória</strong>
+                <small>A sequência aparece em um ponto sorteado da tela, não no centro.</small>
+              </span>
+              <input type="checkbox" id="sw-position" />
+              <span class="switch__track" aria-hidden="true"></span>
+            </label>
+          </div>
+
           <div class="field" id="field-order" hidden>
             <div class="field__head">
               <label class="field__label">Ordem das palavras</label>
@@ -172,15 +184,15 @@
       <!-- ============================= TESTE ============================== -->
       <section class="view" id="view-test" aria-label="Teste de velocidade" hidden>
         <div class="card">
-          <h2 class="card__title">Teste de velocidade de processamento</h2>
+          <h2 class="card__title">Teste de velocidade</h2>
           <p class="prose">
-            O tempo de exibição se ajusta a cada série: acertou duas seguidas, fica mais
-            rápido; errou, fica mais lento. Assim o teste procura, por tentativa, o menor
-            tempo em que você ainda acerta a série inteira.
+            A dificuldade se ajusta a você a cada série: acertou duas seguidas, o tempo
+            encurta ou entra mais um item; errou, a série afrouxa. O teste encontra o seu
+            limite e te coloca em um nível.
           </p>
           <ul class="facts">
-            <li><strong>Até 30 séries</strong>, cerca de 3 a 5 minutos.</li>
-            <li><strong>Quantidade fixa</strong> de itens — só o tempo muda, senão não dá para saber o que foi medido.</li>
+            <li><strong>Até 30 séries</strong>, entre 3 e 5 minutos.</li>
+            <li><strong>Tempo e quantidade</strong> se adaptam juntos, alternando a cada passo.</li>
             <li><strong>Sem contagem</strong>: a espera é sorteada e a série aparece de surpresa.</li>
             <li>Responda o que conseguiu; <strong>chutar não atrapalha</strong>.</li>
           </ul>
@@ -201,16 +213,6 @@
           <h3 class="section-title">Testes anteriores</h3>
           <div id="test-history" class="history-list"></div>
         </div>
-
-        <div class="card card--soft">
-          <h2 class="card__title">O que este teste é e o que não é</h2>
-          <p class="prose">
-            Ele estima o tempo de exibição que <em>você</em> precisa para captar uma
-            sequência curta, neste aparelho e nestas condições. Brilho, distância da tela,
-            cansaço e atenção mudam o resultado. Repetições variam cerca de um nível para
-            mais ou para menos. Não é medida clínica nem teste de QI.
-          </p>
-        </div>
       </section>
 
       <!-- ====================== RESULTADO DO TESTE ======================= -->
@@ -221,16 +223,15 @@
         <div class="tiles" id="test-result-tiles"></div>
 
         <div class="card">
-          <h2 class="card__title">Precisão média por tempo de exibição</h2>
+          <h2 class="card__title">Como você foi em cada dificuldade</h2>
           <div id="test-curve" class="curve"></div>
           <p class="chart__caption">
-            Cada linha é um tempo por que a escada passou. É essa queda de precisão
-            conforme o tempo encurta que define o seu limiar.
+            Cada linha é uma combinação de quantidade e tempo por que o teste passou.
           </p>
         </div>
 
         <div class="card">
-          <h2 class="card__title">Onde isso te coloca</h2>
+          <h2 class="card__title">A escala completa</h2>
           <div class="bands" id="test-band-table"></div>
         </div>
 
@@ -263,11 +264,11 @@
         </div>
 
         <div class="card">
-          <h2 class="card__title">Nível por tipo de estímulo</h2>
+          <h2 class="card__title">Seus níveis</h2>
           <p class="prose">
-            O seu nível é a <strong>menor exposição em que você já acertou uma série
-            inteira</strong> — acertar tudo prova que aquele tempo bastou. Dígitos e
-            palavras têm réguas separadas: ler exige acesso ao léxico, ver um dígito não.
+            O nível vem da <strong>série mais difícil que você acertou inteira</strong>,
+            juntando tempo e quantidade. Dígitos e palavras têm escalas separadas, porque
+            ler custa mais que ver.
           </p>
           <div class="levels-grid" id="levels-by-mode"></div>
 
@@ -278,8 +279,8 @@
           <p class="field__hint" id="scale-hint"></p>
           <div class="bands" id="band-table"></div>
           <p class="chart__caption">
-            Referências aproximadas, em condições ideais, para situar o treino — não um
-            diagnóstico.
+            Os tempos são convertidos para uma carga de referência: 8 dígitos em 100 ms
+            valem o mesmo que 4 dígitos em 50 ms.
           </p>
         </div>
 
@@ -363,11 +364,11 @@
         </div>
 
         <div class="card card--soft">
-          <h2 class="card__title">Sobre</h2>
+          <h2 class="card__title">PiscaMemory</h2>
           <p class="prose">
-            Tudo fica salvo apenas neste aparelho, no armazenamento do navegador.
-            Nenhum dado é enviado para servidores. Instale pela opção
-            “Adicionar à tela de início” para treinar offline.
+            Seus treinos ficam salvos apenas neste aparelho e não são enviados a
+            servidor nenhum. Use “Adicionar à tela de início” para instalar e treinar
+            offline.
           </p>
         </div>
       </section>

@@ -1,6 +1,6 @@
 // Service worker: cache do "app shell" para funcionar offline.
 // A versão no nome do cache invalida tudo quando os arquivos mudam.
-const CACHE = 'speed-memory-v3';
+const CACHE = 'piscamemory-v1';
 
 const SHELL = [
   './',

@@ -1,9 +1,9 @@
 {
-  "name": "speed-memory",
+  "name": "piscamemory",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Treino de memória rápida (dígitos, palavras e frases) mobile-first, sem dependências.",
+  "description": "PiscaMemory — treino de memória rápida (dígitos, palavras e frases), mobile-first e sem dependências.",
   "scripts": {
     "start": "node scripts/serve.js",
     "test": "node tests/run.js",

@@ -1,7 +1,7 @@
 {
-  "name": "Speed Memory — treino de memória",
-  "short_name": "Speed Memory",
-  "description": "Memorize dígitos, palavras ou frases contra o relógio e acompanhe sua evolução.",
+  "name": "PiscaMemory",
+  "short_name": "PiscaMemory",
+  "description": "Treine memória rápida com dígitos, palavras e frases, e acompanhe sua evolução.",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",

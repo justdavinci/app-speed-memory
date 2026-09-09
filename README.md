@@ -1,12 +1,12 @@
-# Speed Memory
+# PiscaMemory
 
-Aplicativo **mobile-first** de treino de memória rápida: você vê uma sequência
-por alguns segundos, ela some, e você digita o que memorizou. Funciona com
-**dígitos**, **palavras aleatórias** ou **frases com sentido**, guarda o
-histórico e mostra a sua evolução.
+Treino de memória rápida, feito para o celular. Uma sequência pisca na tela,
+some, e você digita o que conseguiu guardar. Funciona com **dígitos**,
+**palavras** ou **frases com sentido**, guarda o seu histórico e mostra a sua
+evolução.
 
-Feito em HTML, CSS e JavaScript puros — **sem dependências, sem build, sem
-servidor**. Todos os dados ficam no próprio aparelho.
+HTML, CSS e JavaScript puros: sem dependências, sem build, sem servidor. Tudo
+fica no seu aparelho.
 
 ## O que dá para fazer
 
@@ -14,166 +14,111 @@ servidor**. Todos os dados ficam no próprio aparelho.
 
 | Modo | O que aparece | O que você digita |
 | --- | --- | --- |
-| Dígitos | Números aleatórios, opcionalmente em blocos de 2, 3 ou 4 | Teclado numérico próprio, na zona do polegar |
-| Palavras | Palavras concretas sorteadas, sem repetir na mesma série | Separadas por espaço ou vírgula, **na ordem ou em ordem livre** |
-| Frases | Uma frase gramatical, com o número exato de palavras que você pediu | A frase inteira |
+| Dígitos | Números aleatórios, em blocos de 2, 3 ou 4 se você quiser | Teclado numérico próprio, na zona do polegar |
+| Palavras | Palavras concretas sorteadas, sem repetir na mesma série | Na ordem ou em ordem livre, como preferir |
+| Frases | Uma frase que faz sentido, com o número exato de palavras que você pediu | A frase inteira |
 
-**Tudo configurável**
+**Tudo ajustável**
 
-- Quantos itens por série (3 a 60 dígitos, 2 a 30 palavras, 3 a 30 palavras na frase).
-- Tempo de exposição de **5 ms a 2 minutos**, numa escala com passos finos embaixo
+- Quantos itens por série: 3 a 60 dígitos, 2 a 30 palavras, 3 a 30 palavras na frase.
+- Tempo de exibição de **5 ms a 2 minutos**, numa escala com passos finos embaixo
   (5, 8, 10, 13, 16, 20 ms…) e largos em cima.
-- Ritmo: a série inteira de uma vez, ou um item por vez (o tempo passa a valer por item).
-- **Intervalo antes de cada série**: fixo (de 0 a 15 s — em 0 a série aparece
-  assim que você toca em "Próxima série") ou **sorteado dentro de uma faixa**
-  (ex.: entre 2 s e 10 s), para a exposição não ser previsível.
-- **Contagem visível ou escondida**: escondida, só um ponto pulsa e a série
-  aparece de surpresa.
-- Quantas séries por sessão — o padrão são **sessões de 10 séries**.
-- **Ordem das palavras**: exigir a posição certa de cada uma, ou aceitar as
-  palavras em qualquer ordem (só no modo Palavras — dígitos e frases são
-  posicionais por natureza).
-- Agrupamento dos dígitos, tema, som, vibração e rigor com acentos.
+- Ritmo: a série inteira de uma vez, ou um item por vez.
+- **Intervalo antes de cada série**: fixo de 0 a 15 s — em 0 a série aparece assim
+  que você toca em "Próxima série" — ou sorteado dentro de uma faixa, para não
+  dar para prever.
+- **Contagem visível ou escondida**: escondida, só um ponto pulsa e a série pega
+  você de surpresa.
+- **Posição aleatória**: a sequência aparece em um ponto sorteado da tela, em vez
+  de sempre no centro.
+- Sessões de quantas séries você quiser — o padrão são 10.
+- Tema, som, vibração e rigor com acentos.
 
 **Correção e evolução**
 
-- Correção **posicional**, como nas competições de memória: cada item vale pela
-  posição em que foi digitado. Um item esquecido no meio desalinha o resto.
-- Ao fim de cada série você vê o gabarito com o que errou e o que faltou.
-- Cada sessão registra precisão, itens certos, séries perfeitas, melhor
-  sequência de séries perfeitas e duração.
-- O histórico traz gráficos de precisão e de itens memorizados, recorde de
-  tamanho de série e a tendência das 5 sessões mais recentes contra as 5
-  anteriores.
-- Uma **classificação por tempo de exposição** situa o seu nível atual (veja
-  abaixo).
-- Dá para exportar e importar o histórico em JSON.
+- Correção posicional por padrão: cada item vale pela posição em que foi digitado.
+  No modo Palavras dá para aceitar qualquer ordem.
+- Ao fim de cada série você vê o gabarito, com o que errou e o que faltou.
+- Cada sessão registra precisão, itens certos, séries perfeitas, melhor sequência
+  e duração.
+- O histórico traz gráficos de precisão e de itens memorizados, recordes, a
+  tendência das últimas sessões e os seus níveis por tipo de estímulo.
+- Dá para exportar e importar tudo em JSON.
 
-## Exposições curtas e o limite do aparelho
+## Teste de velocidade
 
-O tempo de exposição desce até 5 ms, mas **nenhuma tela mostra algo por menos
-de um quadro**. Num aparelho de 60 Hz o quadro dura ~17 ms; num de 120 Hz,
-~8 ms. Pedir 5 ms ali significa, na prática, 17 ms.
+Uma aba própria com um teste adaptativo que encontra o seu limite e te coloca
+em um nível. Dá para repetir quando quiser e comparar com os anteriores.
 
-O app não finge o contrário:
+**Como ele se adapta.** Duas séries seguidas inteiramente certas sobem a
+dificuldade; uma série errada desce. A cada passo ele alterna entre as duas
+dimensões: um passo encurta o tempo, o seguinte acrescenta mais um item. Quando
+uma delas chega ao limite — o tempo no piso da tela, a quantidade no teto — ele
+segue pela outra.
 
-- Ele mede a duração real do quadro do aparelho quando abre e avisa, na tela de
-  configuração, quando o tempo pedido é menor que isso.
-- Cada exposição é cronometrada quadro a quadro e a **duração real medida**
-  aparece como métrica no resultado da sessão.
-- Abaixo de 1 s a barra de tempo some (viraria um piscar inútil) e a exibição
-  passa a usar o caminho de precisão, sincronizado com os quadros da tela.
+- **Até 30 séries**, entre 3 e 5 minutos.
+- **Sem contagem**, com espera sorteada entre 1,5 s e 4 s.
+- No teste, a barra de tempo e o botão "Já memorizei" não aparecem: o tempo medido
+  é o tempo que o app controlou.
+- O resultado mostra o seu nível, a maior quantidade que você acertou por inteiro
+  e como você foi em cada dificuldade.
 
-O valor medido é a melhor aproximação possível de dentro do navegador: ele
-conta os quadros entre a pintura e a remoção do estímulo, sem acesso ao
-hardware da tela.
+## Níveis
 
-## Classificação: duas réguas, uma para cada tipo de estímulo
+São duas escalas de 7 níveis, uma para cada tipo de estímulo, porque ler custa
+mais que ver. Os tempos são convertidos para uma carga de referência antes de
+virar nível, então quantidade e tempo entram na mesma conta: **8 dígitos em
+100 ms valem o mesmo que 4 dígitos em 50 ms**.
 
-Dígitos e palavras não se comparam na mesma régua. Ver um dígito é
-reconhecimento de caractere; ler uma palavra exige acesso ao léxico e custa
-bem mais tempo. Por isso há **duas escalas de 7 níveis**, cada uma medindo o
-que faz sentido para o seu estímulo — e uma **média** entre elas.
+### Dígitos (tempo para 4 dígitos)
 
-O seu nível num tipo é a **menor exposição em que você já acertou uma série
-inteira** daquele tipo. Acertar tudo prova que o tempo bastou; acerto parcial
-não prova.
-
-### Dígitos — pelo tempo total da série
-
-| Exposição total | Nível | O que pode acontecer |
+| Nível | Tempo | Nome |
 | --- | --- | --- |
-| 5–10 ms | 7 | Pode haver processamento visual, mas identificação consciente confiável é difícil |
-| 10–20 ms | 6 | Um dígito ou estímulo simples pode às vezes ser identificado |
-| 20–50 ms | 5 | Já pode ser suficiente para reconhecer vários caracteres em condições ideais |
-| 50–100 ms | 4 | Faixa da duração clássica dos experimentos de memória icônica (~50 ms): cerca de 4 a 5 caracteres relatados em média |
-| 100–200 ms | 3 | Uma sequência curta já pode ser codificada com bastante eficiência |
-| 200–500 ms | 2 | A limitação começa a ser muito mais de memória e atenção do que de percepção |
-| acima de 500 ms | 1 | O desafio passa a ser inteiramente de memória |
+| 7 | até 10 ms | Relâmpago |
+| 6 | 10–20 ms | Faísca |
+| 5 | 20–50 ms | Flash |
+| 4 | 50–100 ms | Piscada |
+| 3 | 100–200 ms | Olhada |
+| 2 | 200–500 ms | Vista calma |
+| 1 | acima de 500 ms | Sem pressa |
 
-### Palavras — pelo tempo por palavra
+### Palavras (tempo por palavra)
 
-| Tempo por palavra | Nível | O que pode acontecer |
+| Nível | Tempo | Nome |
 | --- | --- | --- |
-| até 35 ms | 7 | Mesmo uma palavra isolada só é identificada em condições ideais; captar várias é improvável |
-| 35–70 ms | 6 | Uma ou outra palavra pode ser reconhecida, mas a maior parte escapa antes de virar memória |
-| 70–120 ms | 5 | Mais rápido do que a compreensão costuma acompanhar em apresentação serial |
-| 120–200 ms | 4 | Perto do limite de leitores rápidos e treinados (~300 a 500 palavras por minuto) |
-| 200–300 ms | 3 | Faixa da fixação média na leitura silenciosa (~200 a 300 palavras por minuto) |
-| 300–500 ms | 2 | Tempo de sobra para ler cada palavra e começar a organizar a memorização |
-| acima de 500 ms | 1 | A leitura deixou de ser o gargalo: o desafio é memória e estratégia |
+| 7 | até 35 ms | Relâmpago |
+| 6 | 35–70 ms | Faísca |
+| 5 | 70–120 ms | Flash |
+| 4 | 120–200 ms | Piscada |
+| 3 | 200–300 ms | Olhada |
+| 2 | 300–500 ms | Vista calma |
+| 1 | acima de 500 ms | Sem pressa |
 
-**De onde vêm.** A tabela dos dígitos é a da literatura de percepção visual e
-memória icônica (a última linha é uma extensão para tempos acima dela). A das
-palavras é derivada da pesquisa em leitura: fixação média de 200 a 250 ms por
-palavra na leitura silenciosa, leitura veloz treinada por volta de 120 a 200 ms
-por palavra, compreensão desabando abaixo de ~100 ms por palavra em
-apresentação serial, e reconhecimento de palavra isolada com máscara possível
-por volta de 30 a 50 ms. São referências aproximadas em condições ideais, não
-um diagnóstico.
+No treino, o seu nível vem da série mais difícil que você acertou inteira. A
+**média** junta os níveis de dígitos e de palavras, e aparece quando existem os
+dois. Frases usam a escala verbal e aparecem à parte.
 
-**Por que normalizar por palavra.** Assim uma série de 3 palavras e outra de 10
-ficam comparáveis: o que conta é quanto tempo cada palavra teve. Frases usam a
-mesma régua verbal, por serem o mesmo tipo de processamento.
+## Exposições curtas
 
-**A média** combina o nível de dígitos com o de palavras — os dois tipos de
-teste. Ela só aparece quando existem os dois, e frases ficam de fora por serem
-outra tarefa (o contexto da frase ajuda a memorizar, então o número não seria
-comparável).
-
-## Teste de velocidade de processamento
-
-Uma aba própria, com um teste adaptativo que estima o menor tempo de exibição
-em que você ainda capta uma sequência curta. É repetível: cada resultado fica
-guardado para comparação.
-
-**Como funciona.** É uma escada psicofísica **2 para baixo, 1 para cima**: duas
-séries seguidas totalmente certas encurtam o tempo de exibição; uma série
-errada alonga. Essa regra converge para o tempo em que você acerta a série
-inteira em cerca de **71%** das vezes — é esse ponto que o teste chama de
-limiar.
-
-- No máximo **30 séries** (3 a 5 minutos), ou menos se a escada estabilizar
-  antes (8 viradas de direção).
-- **Carga fixa**: 4 dígitos ou 3 palavras. Se a quantidade mudasse junto com o
-  tempo, não daria para saber qual das duas coisas o resultado mediu.
-- **Parâmetros por tipo**: o teste de palavras começa mais devagar (900 ms
-  contra 500 ms) e tem teto mais alto (3 s contra 2 s), porque ler custa mais
-  que ver.
-- **Sem contagem** e com espera sorteada entre 1,5 s e 4 s, para você não pegar
-  o ritmo e antecipar o estímulo.
-- Passos largos no começo e estreitos depois das duas primeiras viradas, para
-  chegar perto do limiar rápido e refinar em seguida.
-- O limiar é a **média geométrica das últimas 6 viradas** — geométrica porque a
-  escala de tempos é multiplicativa.
-- A escada nunca desce abaixo de **um quadro da sua tela**: ali os degraus
-  seriam indistinguíveis e o teste mediria ruído.
-
-**O resultado** coloca você em um dos 7 níveis **da régua daquele estímulo** —
-o teste de dígitos usa o tempo total, o de palavras usa o tempo por palavra —,
-mostra o limiar estimado e a **precisão média por tempo de exibição** — a queda de acerto conforme o tempo encurta. Ele também sinaliza
-quando o número não é confiável: `piso` (você acertou até o degrau mais rápido
-do aparelho), `teto` (não acertou nem no tempo mais longo) ou `parcial` (as
-séries acabaram antes de estabilizar).
-
-**Limites honestos.** O teste estima o tempo que *você* precisa para captar uma
-sequência curta, neste aparelho e nestas condições. Brilho, distância da tela,
-cansaço e atenção mudam o resultado, e repetições variam cerca de um nível para
-mais ou para menos — é a precisão que 30 séries permitem. Não é medida clínica
-nem teste de QI.
+O tempo desce até 5 ms, mas nenhuma tela mostra algo por menos de um quadro:
+~17 ms a 60 Hz, ~8 ms a 120 Hz. O app mede a duração do quadro do seu aparelho
+ao abrir, avisa quando o tempo pedido é menor que isso, cronometra cada exibição
+quadro a quadro e mostra no resultado quanto tempo apareceu de verdade. O teste
+de velocidade não desce abaixo desse piso — de lá em diante ele aumenta a
+quantidade de itens.
 
 ## Como rodar
 
 ```bash
-npm start            # servidor estático em http://localhost:8080
+npm start            # http://localhost:8080
 ```
 
-Qualquer servidor estático serve (`python3 -m http.server`, por exemplo).
-Abrir o `index.html` direto pelo `file://` não funciona: o app usa módulos ES,
-que exigem HTTP.
+Qualquer servidor estático serve. Abrir o `index.html` direto pelo `file://` não
+funciona: o app usa módulos ES, que exigem HTTP.
 
-No celular, use "Adicionar à tela de início": o app é um PWA e funciona
-offline depois da primeira visita.
+Para publicar, é só servir a pasta como site estático — GitHub Pages, Netlify,
+Vercel ou qualquer hospedagem de arquivos. No celular, "Adicionar à tela de
+início" instala o app, que passa a funcionar offline.
 
 ## Testes
 
@@ -181,54 +126,47 @@ offline depois da primeira visita.
 npm test
 ```
 
-78 testes sem dependências cobrindo as partes puras: geradores, concordância
-das frases, correção das respostas (com e sem ordem obrigatória), motor da
-sessão, escala de exposição, faixas perceptuais, sorteio do intervalo, migração
-de ajustes antigos, estatísticas do histórico e a escada do teste adaptativo —
-esta última verificada com uma pessoa simulada, conferindo que o teto de 30
-séries é respeitado, que a escada não desce abaixo do piso do aparelho e que
-limiares diferentes produzem estimativas separadas. As duas réguas também são
-testadas: cobertura das faixas, normalização por palavra e a média que só
-existe quando há nível nos dois tipos. Entre eles, a garantia de que a frase gerada tem
-**exatamente** o número de palavras pedido (verificado de 3 a 30 palavras) e de
-que artigos e adjetivos concordam em gênero.
+82 testes sem dependências cobrindo as partes puras: geradores, concordância das
+frases, correção com e sem ordem, motor da sessão, escala de exposição, as duas
+escalas de nível, sorteio do intervalo, migração de ajustes antigos,
+estatísticas e a escada adaptativa — esta última verificada com pessoas
+simuladas, conferindo que o teto de 30 séries é respeitado, que tempo e
+quantidade se alternam, que a escada não desce abaixo do piso do aparelho e que
+memórias e velocidades diferentes produzem resultados diferentes.
 
 ## Como as frases são geradas
 
-Frase aleatória com número exato de palavras é um problema de encaixe. O
-gerador resolve assim:
+Frase aleatória com número exato de palavras é um problema de encaixe:
 
-1. **Planeja as orações.** Até 12 palavras cabem em uma oração; acima disso o
-   total é dividido em orações ligadas por conectivos (`e`, `mas`, `porque`…),
-   e cada conectivo consome uma palavra do orçamento.
-2. **Monta o núcleo.** Sujeito + verbo (3 palavras) ou sujeito + verbo +
-   objeto (5 palavras).
-3. **Preenche o resto com encaixes.** Adjetivo no sujeito (+1), advérbio (+1),
-   locução adverbial (+2, +3 ou +4)… Uma busca com retrocesso escolhe a
-   combinação que fecha o orçamento exatamente.
-4. **Mantém o sentido.** Cada verbo declara que categorias de objeto aceita e
-   se exige sujeito humano — por isso sai "o cozinheiro comeu o bolo" e nunca
-   "a formiga consertou a laranja". Artigos e adjetivos concordam com o gênero
-   do substantivo.
+1. **Planeja as orações.** Até 12 palavras cabem em uma; acima disso o total é
+   dividido em orações ligadas por conectivos (`e`, `mas`, `porque`…), e cada
+   conectivo consome uma palavra do orçamento.
+2. **Monta o núcleo.** Sujeito + verbo, ou sujeito + verbo + objeto.
+3. **Preenche o resto com encaixes.** Adjetivo (+1), advérbio (+1), locução
+   adverbial (+2, +3 ou +4), escolhidos por busca com retrocesso até fechar o
+   total exato.
+4. **Mantém o sentido.** Cada verbo declara que categorias de objeto aceita e se
+   exige sujeito humano — por isso sai "o cozinheiro comeu o bolo" e nunca "a
+   formiga consertou a laranja". Artigos e adjetivos concordam em gênero.
 
 ## Estrutura
 
 ```
-index.html                     telas (treinar, histórico, resultado, ajustes)
+index.html                     telas (treinar, teste, histórico, resultado, ajustes)
 assets/css/styles.css          estilo único, tema claro e escuro
 assets/js/
-  app.js                       interface: navegação, condução do treino, gráficos na tela
+  app.js                       interface: navegação, condução do treino e do teste
   engine.js                    máquina de estados da sessão
-  scoring.js                   correção posicional das respostas
-  storage.js                   preferências e histórico (localStorage)
+  scoring.js                   correção das respostas, com ou sem ordem
+  storage.js                   preferências, histórico e testes (localStorage)
   charts.js                    gráficos em SVG puro
-  perception.js                escala de exposição e classificação perceptual
-  adaptive.js                  escada psicofísica do teste de velocidade
+  perception.js                escala de exposição e as duas escalas de nível
+  adaptive.js                  escada do teste de velocidade
   util.js                      utilidades (sorteio, normalização de texto, formatação)
   generators/
     digits.js                  sequências numéricas
     words.js                   palavras sorteadas do banco
-    sentences.js               gerador de frases com número exato de palavras
+    sentences.js               frases com número exato de palavras
     lexicon.js                 léxico pt-BR com gênero e categorias semânticas
 sw.js                          service worker (offline)
 manifest.webmanifest           instalação como PWA
@@ -237,13 +175,13 @@ scripts/gen-icons.js           gera os ícones PNG sem dependências
 tests/run.js                   suíte de testes
 ```
 
-Os módulos `engine`, `scoring`, `storage`, `util` e `generators/` não tocam no
-DOM — é por isso que dá para testá-los direto no Node.
+Os módulos `engine`, `scoring`, `storage`, `util`, `perception`, `adaptive` e
+`generators/` não tocam no DOM — é por isso que dá para testá-los direto no Node.
 
 ## Privacidade
 
-Nada sai do aparelho: preferências e histórico ficam no `localStorage` do
-navegador. Não há contas, servidores nem telemetria. Apagar os dados do site
+Nada sai do aparelho: preferências, histórico e testes ficam no `localStorage`
+do navegador. Não há contas, servidores nem telemetria. Apagar os dados do site
 apaga o histórico (exporte antes, se quiser guardar).
 
 ## Licença

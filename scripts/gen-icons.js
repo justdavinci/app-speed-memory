@@ -1,4 +1,4 @@
-// Gera os ícones PNG do PWA sem dependências externas (canvas próprio + zlib).
+// Gera os ícones PNG do PiscaMemory sem dependências externas (canvas próprio + zlib).
 // Uso: npm run icons
 import { deflateSync } from 'node:zlib';
 import { writeFileSync } from 'node:fs';

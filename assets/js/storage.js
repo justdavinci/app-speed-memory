@@ -2,6 +2,8 @@
 import { avg, uid } from './util.js';
 import { MAX_EXPOSURE_MS, MIN_EXPOSURE_MS, averageLevel, classify } from './perception.js';
 
+// As chaves mantêm o prefixo antigo de propósito: renomear apagaria o
+// histórico de quem já vinha usando o app.
 const SETTINGS_KEY = 'speedmemory.settings.v1';
 const HISTORY_KEY = 'speedmemory.history.v1';
 const TESTS_KEY = 'speedmemory.tests.v1';
@@ -38,6 +40,8 @@ export const DEFAULT_SETTINGS = {
   strictAccents: false,
   sound: true,
   haptics: true,
+  // Estímulo em posição sorteada na tela, em vez de sempre no centro.
+  randomPosition: false,
   // Espera entre o fim de uma série e a próxima exposição.
   interval: { mode: 'fixed', ms: 2000, minMs: 2000, maxMs: 10000, showCountdown: true },
   perMode: {
@@ -179,11 +183,11 @@ export function addTest(result) {
   return trimmed;
 }
 
-/** Melhor resultado (menor limiar) de um modo, para comparar repetições. */
+/** Melhor resultado (menor tempo na régua) de um modo, para comparar repetições. */
 export function bestTest(tests, mode) {
   const list = tests.filter((t) => !mode || t.mode === mode);
   if (!list.length) return null;
-  return list.reduce((a, b) => (b.thresholdMs < a.thresholdMs ? b : a));
+  return list.reduce((a, b) => (b.basisMs < a.basisMs ? b : a));
 }
 
 /** Último teste de cada tipo e a média dos dois níveis. */

@@ -1,5 +1,5 @@
-// Camada de interface: navegação, configuração, condução do treino,
-// resultado e histórico. Toda a regra de jogo vive em engine.js/scoring.js.
+// PiscaMemory — camada de interface: navegação, configuração, condução do
+// treino, resultado e histórico. A regra de jogo vive em engine.js/scoring.js.
 
 import { chunk, clamp, esc, fmtDateTime, fmtDuration, pct } from './util.js';
 import {
@@ -8,14 +8,15 @@ import {
   loadSettings, loadTests, levelsByMode, saveSettings, statsFor, testLevels,
 } from './storage.js';
 import {
-  advance, createSession, currentRound, finishSession, isLastRound, nextIntervalMs, submitRound,
+  advance, createSession, currentRound, finishSession, generateContent, isLastRound,
+  nextIntervalMs, submitRound,
 } from './engine.js';
 import {
   BAND_SCALES, EXPOSURE_STEPS, classify, formatExposure, formatLevel, levelOf,
   scaleForMode, stepIndexFor,
 } from './perception.js';
 import {
-  TEST, createStaircase, currentExposure, finishTest, nextInterval, recordTrial,
+  TEST, createStaircase, currentCount, currentExposure, finishTest, nextInterval, recordTrial,
 } from './adaptive.js';
 import { barChart, lineChart } from './charts.js';
 
@@ -323,9 +324,8 @@ function renderTrain() {
   const frameHint = $('#hint-frame');
   frameHint.hidden = exposure >= frame;
   frameHint.textContent =
-    `Sua tela atualiza a ~${hz} Hz, ou seja, um quadro a cada ${frame.toFixed(0)} ms. `
-    + `Pedir ${formatExposure(exposure)} vai mostrar por ${frame.toFixed(0)} ms — o mínimo do aparelho. `
-    + 'A duração real medida aparece no resultado.';
+    `Sua tela é de ~${hz} Hz: ela não consegue mostrar nada por menos de ${frame.toFixed(0)} ms. `
+    + 'O resultado mostra o tempo que apareceu de verdade.';
 
   $$('[data-pace]').forEach((btn) => {
     btn.setAttribute('aria-checked', String(btn.dataset.pace === c.pace));
@@ -347,6 +347,7 @@ function renderTrain() {
   $('#out-interval-max').textContent = formatExposure(interval.maxMs);
   $('#out-interval').textContent = intervalLabel(interval);
   $('#sw-countdown').checked = interval.showCountdown;
+  $('#sw-position').checked = !!state.settings.randomPosition;
   $('#hint-interval').textContent = interval.mode === 'random'
     ? 'A espera é sorteada dentro da faixa a cada série, para a exposição não ser previsível.'
     : interval.ms === 0
@@ -494,6 +495,20 @@ async function runRound() {
   await memorize(token);
 }
 
+/**
+ * Posiciona o estímulo em um ponto sorteado da área de exibição, sem deixar
+ * nenhuma parte dele sair da tela.
+ */
+function scatterContent() {
+  const area = $('#content');
+  const item = area.firstElementChild;
+  if (!item) return;
+  const livreX = Math.max(0, area.clientWidth - item.offsetWidth);
+  const livreY = Math.max(0, area.clientHeight - item.offsetHeight);
+  item.style.left = `${Math.round(Math.random() * livreX)}px`;
+  item.style.top = `${Math.round(Math.random() * livreY)}px`;
+}
+
 async function memorize(token) {
   const s = state.session;
   const round = currentRound(s);
@@ -509,6 +524,10 @@ async function memorize(token) {
   $('#btn-ready').hidden = config.pace === 'perItem' || !withTimer;
   $('#timer-wrap').hidden = !withTimer;
 
+  // No teste a posição é sempre a mesma, para não virar mais uma variável.
+  const scattered = state.settings.randomPosition && s.kind !== 'test';
+  $('#content').classList.toggle('content--scattered', scattered);
+
   const parts = config.pace === 'perItem'
     ? round.content.items.map((_, i) => i)
     : [null];
@@ -516,6 +535,7 @@ async function memorize(token) {
   const measured = [];
   for (const itemIndex of parts) {
     $('#content').innerHTML = contentMarkup(s.mode, round.content, config, itemIndex);
+    if (scattered) scatterContent();
     const result = asOutcome(withTimer ? await runTimer(exposureMs) : await flash(exposureMs));
     if (result.outcome === 'abort' || token !== runToken) return;
     measured.push(result.actual ?? exposureMs);
@@ -523,6 +543,7 @@ async function memorize(token) {
   }
 
   round.actualExposureMs = measured.reduce((a, b) => a + b, 0) / measured.length;
+  $('#content').classList.remove('content--scattered');
   $('#content').innerHTML = '';
   $('#content').style.visibility = 'visible';
   beep(440, 90, 0.05);
@@ -542,8 +563,9 @@ function toRecall() {
     ? 'Digite os dígitos na ordem'
     : s.mode === 'words' ? 'Digite as palavras na ordem' : 'Escreva a frase que você viu';
 
+  const count = currentRound(s)?.count ?? s.config.count;
   if (isDigits) {
-    $('#digits-total').textContent = s.config.count;
+    $('#digits-total').textContent = count;
     renderTyped();
   } else {
     const input = $('#text-input');
@@ -551,7 +573,7 @@ function toRecall() {
     input.placeholder = s.mode === 'words'
       ? 'Separe por espaço ou vírgula'
       : 'Escreva a frase completa';
-    $('#words-total').textContent = s.config.count;
+    $('#words-total').textContent = count;
     updateWordCount();
     setTimeout(() => input.focus(), 60);
   }
@@ -680,8 +702,8 @@ function renderTestIntro() {
 
   const frame = state.frameMs;
   $('#test-floor-hint').textContent =
-    `Sua tela mostra um quadro a cada ${frame.toFixed(0)} ms (~${Math.round(1000 / frame)} Hz). `
-    + 'O teste não desce abaixo disso, porque tempos menores seriam idênticos na prática.';
+    `Sua tela é de ~${Math.round(1000 / frame)} Hz: o tempo mais curto que ela mostra é ${frame.toFixed(0)} ms. `
+    + 'Daí em diante o teste sobe a quantidade de itens.';
 
   const card = $('#test-last-card');
   card.hidden = !state.tests.length;
@@ -701,8 +723,8 @@ function renderTestIntro() {
   ].join('');
 
   $('#test-average-hint').textContent = levels.average === null
-    ? 'Os dois testes medem coisas diferentes: dígitos pelo tempo total da série, palavras pelo tempo por palavra.'
-    : 'Cada tipo tem a sua régua — a média só faz sentido porque os dois níveis já estão na mesma escala de 1 a 7.';
+    ? 'Faça os dois testes para ver a sua média.'
+    : 'Dígitos e palavras têm escalas próprias; a média junta os dois níveis.';
 
   const mine = state.tests.filter((t) => t.mode === state.testMode);
   const best = bestTest(state.tests, state.testMode);
@@ -710,7 +732,7 @@ function renderTestIntro() {
       <article class="history-item">
         <div class="history-item__main">
           <div class="history-item__title">Nível ${t.level} · ${esc(t.band.name)}</div>
-          <div class="history-item__meta">${fmtDateTime(t.finishedAt)} · ${MODE_LABELS[t.mode]}${t.mode === 'words' && t.ordered === false ? ' (ordem livre)' : ''} · ${t.trials} séries · limiar ${esc(formatExposure(t.thresholdMs))}${t.id === best.id ? ' · melhor' : ''}</div>
+          <div class="history-item__meta">${fmtDateTime(t.finishedAt)} · ${esc(formatExposure(t.basisMs))} ${esc(unitOf(t))} · até ${t.span} ${t.mode === 'digits' ? 'dígitos' : 'palavras'}${t.id === best.id ? ' · melhor' : ''}</div>
         </div>
         <div class="history-item__score">${t.level}</div>
       </article>`).join('') : `<p class="empty">Nenhum teste de ${esc(MODE_LABELS[state.testMode].toLowerCase())} ainda.</p>`;
@@ -722,19 +744,21 @@ function asLevelEntry(result) {
     level: result.level,
     levels: result.levels ?? 7,
     band: result.band,
-    basisMs: result.basisMs ?? result.thresholdMs,
+    basisMs: result.basisMs,
     scale: BAND_SCALES[result.scaleId] || scaleForMode(result.mode),
   };
 }
 
 function levelMarkup(result) {
-  const scale = BAND_SCALES[result.scaleId] || scaleForMode(result.mode);
-  const detalhe = scale.perItem
-    ? `${formatExposure(result.thresholdMs)} para ${result.count} palavras — ${formatExposure(result.basisMs)} por palavra`
-    : `limiar ${formatExposure(result.thresholdMs)}`;
+  const itens = result.mode === 'digits' ? 'dígitos' : 'palavras';
   return `<span class="level__value">${result.level}</span>
     <span class="level__name">${esc(result.band.name)}</span>
-    <span class="level__note">nível ${result.level} de ${result.levels} na régua de ${esc(scale.label.toLowerCase())} · ${esc(detalhe)}</span>`;
+    <span class="level__note">nível ${result.level} de ${result.levels} · ${esc(formatExposure(result.basisMs))} ${esc(unitOf(result))} · até ${result.span} ${itens} de uma vez</span>`;
+}
+
+/** Unidade da régua de um resultado de teste. */
+function unitOf(result) {
+  return (BAND_SCALES[result.scaleId] || scaleForMode(result.mode)).unitShort;
 }
 
 function startTest() {
@@ -765,6 +789,12 @@ function applyStaircaseToRound() {
   const s = state.session;
   const round = currentRound(s);
   if (!round) return;
+  const count = currentCount(s.staircase);
+  // A quantidade também se adapta, então o conteúdo da série é gerado agora.
+  if (round.content.answer.length !== count) {
+    round.content = generateContent(s.mode, count);
+  }
+  round.count = count;
   round.exposureMs = currentExposure(s.staircase);
   round.intervalMs = nextInterval();
 }
@@ -773,44 +803,47 @@ function endTest() {
   const result = finishTest(state.session.staircase);
   result.ordered = answersMustBeOrdered(state.session.mode);
   state.tests = addTest(result);
-  state.testResult = result;
+  // O registro salvo ganhou um id: usar ele evita o teste se comparar consigo
+  // mesmo ao procurar o melhor resultado anterior.
+  state.testResult = state.tests[state.tests.length - 1];
   state.session = null;
   abortRun();
   keepAwake(false);
   $('#play').hidden = true;
   $('#tabbar').hidden = false;
-  renderTestResult(result);
+  renderTestResult(state.testResult);
   showView('test-result');
 }
 
 function renderTestResult(result) {
-  $('#test-result-level').innerHTML = levelMarkup(result);
+  const scale = BAND_SCALES[result.scaleId] || scaleForMode(result.mode);
+  const itensPlural = result.mode === 'digits' ? 'dígitos' : 'palavras';
 
+  $('#test-result-level').innerHTML = levelMarkup(result);
   $('#test-result-level').classList.add('level--big');
   const notes = {
-    convergiu: `Estimativa a partir de ${result.reversals} viradas da escada — o teste se estabilizou.`,
-    piso: `Você acertou até o degrau mais rápido possível neste aparelho (${formatExposure(result.floorMs)}). O seu limiar pode ser menor do que a tela consegue mostrar.`,
-    teto: 'Você não acertou séries nem no tempo mais longo do teste. Vale repetir com mais calma, ou treinar antes com tempos maiores.',
-    parcial: 'As séries acabaram antes de a escada se estabilizar. O número abaixo é uma estimativa grosseira — repita o teste.',
+    convergiu: `O teste encontrou o seu limite depois de ${result.reversals} idas e vindas.`,
+    invicto: `Você não errou nenhuma série: a dificuldade subiu até o fim. Dá para ir além de ${result.span} ${itensPlural}.`,
+    piso: `Você chegou ao limite da tela e ao máximo de ${result.finalCount} ${itensPlural} do teste.`,
+    teto: 'Nenhuma série saiu inteira, nem no tempo mais longo. Treine um pouco em tempos maiores e volte.',
+    parcial: 'As 30 séries acabaram antes de fechar a conta. Refaça o teste para um número mais firme.',
   };
   $('#test-result-note').textContent = notes[result.quality];
 
   const previous = state.tests.filter((t) => t.mode === result.mode && t.id !== result.id);
-  const best = previous.length ? Math.min(...previous.map((t) => t.thresholdMs)) : null;
-  const scale = BAND_SCALES[result.scaleId] || scaleForMode(result.mode);
-  const tiles = [
-    tile(formatExposure(result.thresholdMs), 'limiar da série'),
-    tile(formatExposure(result.basisMs), scale.unitShort === 'total' ? 'tempo total' : 'por palavra'),
-    tile(String(result.trials), 'séries usadas'),
+  const best = previous.length ? Math.min(...previous.map((t) => t.basisMs)) : null;
+  $('#test-result-tiles').innerHTML = [
+    tile(formatExposure(result.basisMs), scale.unitShort),
+    tile(`${result.span} ${itensPlural}`, 'quantidade alcançada'),
+    tile(String(result.trials), 'séries'),
     tile(best === null ? 'primeiro' : formatExposure(best), best === null ? 'teste' : 'melhor anterior'),
-  ];
-  $('#test-result-tiles').innerHTML = tiles.join('');
+  ].join('');
 
   $('#test-curve').innerHTML = result.curve.map((point) => {
     const p = Math.round(point.accuracy * 100);
     const cls = p >= 80 ? ' is-high' : p <= 40 ? ' is-low' : '';
     return `<div class="curve__row">
-        <span class="curve__ms">${esc(formatExposure(point.exposureMs))}</span>
+        <span class="curve__ms">${point.count}× ${esc(formatExposure(point.exposureMs))}</span>
         <span class="curve__bar"><span class="curve__fill${cls}" style="width:${p}%"></span></span>
         <span class="curve__value">${p}% · ${point.trials}×</span>
       </div>`;
@@ -1020,7 +1053,7 @@ function historyItem(s) {
 
 function exportData() {
   const payload = {
-    app: 'speed-memory',
+    app: 'piscamemory',
     version: 1,
     exportedAt: new Date().toISOString(),
     sessions: state.history,
@@ -1029,7 +1062,7 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `speed-memory-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `piscamemory-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1139,6 +1172,11 @@ function bindEvents() {
     });
   });
 
+  $('#sw-position').addEventListener('change', (e) => {
+    state.settings.randomPosition = e.target.checked;
+    persist();
+  });
+
   $('#sw-countdown').addEventListener('change', (e) => {
     state.settings.interval.showCountdown = e.target.checked;
     persist();
@@ -1182,8 +1220,11 @@ function bindEvents() {
     const result = state.testResult;
     if (!result) { showView('train'); return; }
     state.settings.mode = result.mode;
-    cfg().exposureMs = EXPOSURE_STEPS[stepIndexFor(result.thresholdMs)];
-    cfg().count = TEST.itemCount[result.mode];
+    // Reproduz no treino a dificuldade que o teste encontrou.
+    const count = Math.max(result.span || TEST.itemCount[result.mode], TEST.minCount[result.mode]);
+    const exposure = (result.basisMs * count) / result.refCount;
+    cfg().exposureMs = EXPOSURE_STEPS[stepIndexFor(exposure)];
+    cfg().count = count;
     persist();
     showView('train');
     renderTrain();
@@ -1315,7 +1356,7 @@ function handleKey(key) {
   } else if (key === 'ok') {
     submitAnswer(state.typed);
     return;
-  } else if (state.typed.length < s.config.count + 10) {
+  } else if (state.typed.length < (currentRound(s)?.count ?? s.config.count) + 10) {
     state.typed += key;
   }
   renderTyped();
