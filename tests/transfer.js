@@ -23,6 +23,7 @@ import {
 import { getModule } from '../assets/js/tryhard/modules/index.js';
 import { TRANSFER_BENCHMARK_TRIALS } from '../assets/js/tryhard/modules/transferBenchmark.js';
 import { stimulusMarkup } from '../assets/js/tryhard/view.js';
+import { SYMBOL_IDS, symbolName } from '../assets/js/tryhard/symbols.js';
 import * as store from '../assets/js/tryhard/store.js';
 import { createControl, runModuleBlock } from '../assets/js/tryhard/runner.js';
 
@@ -119,6 +120,66 @@ export function register({ test, group }) {
       const cells = scene.elements.filter((e) => e.row !== null).map((e) => `${e.row}:${e.col}`);
       assert.equal(new Set(cells).size, cells.length, `${t.familyId}/${t.templateId}: colisão de células`);
     }
+  });
+
+  test('nenhum identificador interno de símbolo vira texto na tela', () => {
+    const internos = new Set(SYMBOL_IDS);
+    const nomes = new Set(SYMBOL_IDS.map(symbolName));
+    assert.equal(nomes.size, SYMBOL_IDS.length, 'dois símbolos com o mesmo nome');
+
+    for (const t of allTemplates()) {
+      for (let i = 0; i < 8; i++) {
+        const rng = seeded(i * 17 + t.templateId.length);
+        const scene = generateScene(t.familyId, { difficulty: DIFFICULTY, rng, templateId: t.templateId });
+        const label = `${t.familyId}/${t.templateId}`;
+
+        const textos = [
+          ...scene.elements.flatMap((e) => [e.label, e.value, e.category, e.attribute]),
+          ...scene.distractors,
+        ].filter(Boolean);
+        for (const texto of textos) {
+          assert.ok(!internos.has(texto), `${label}: "${texto}" é id interno`);
+        }
+
+        for (const nivel of [1, 2, 3, 4]) {
+          for (const q of generateQueries(scene, { complexity: nivel, rng })) {
+            assert.ok(!internos.has(q.answer), `${label}: resposta "${q.answer}" é id interno`);
+            for (const id of internos) {
+              assert.ok(!q.text.includes(`"${id}"`), `${label}: enunciado cita o id ${id}`);
+            }
+            for (const opcao of q.response.options || []) {
+              assert.ok(!internos.has(opcao), `${label}: opção "${opcao}" é id interno`);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test('cenas de figuras devolvem o desenho junto do nome', () => {
+    const rng = seeded(64);
+    let comFiguras = 0;
+    for (let i = 0; i < 40 && comFiguras < 5; i++) {
+      const scene = generateScene('symbol-grid', {
+        difficulty: DIFFICULTY, rng: seeded(400 + i), templateId: 'grid',
+      });
+      if (!scene.glyphs) continue;
+      comFiguras += 1;
+
+      // Todo nome citável tem desenho, e todo desenho é um símbolo de verdade.
+      for (const [nome, id] of Object.entries(scene.glyphs)) {
+        assert.equal(symbolName(id), nome, 'o mapa nome→desenho está trocado');
+        assert.ok(SYMBOL_IDS.includes(id));
+      }
+      for (const q of generateQueries(scene, { complexity: 2, rng })) {
+        if (q.response.kind !== 'choice') continue;
+        assert.ok(q.response.glyphs, 'a resposta perdeu os desenhos');
+        for (const opcao of q.response.options) {
+          assert.ok(q.response.glyphs[opcao], `opção sem desenho: ${opcao}`);
+        }
+      }
+    }
+    assert.ok(comFiguras >= 5, 'o modelo de símbolos nunca sorteou figuras');
   });
 
   test('a variação de contexto muda a aparência do mesmo modelo', () => {

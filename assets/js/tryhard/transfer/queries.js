@@ -21,6 +21,27 @@ function choice(options, { rng, symbols = false }) {
   return { kind: 'choice', options: rShuffle(rng, options), symbols };
 }
 
+/**
+ * Cenas de figuras citam os símbolos pelo nome em português, mas a resposta
+ * mostra o desenho: quem viu uma forma escolhe a forma, sem ter de traduzir a
+ * figura em palavra antes de responder.
+ */
+function attachGlyphs(scene, query) {
+  if (!scene.glyphs) return query;
+  const out = { ...query };
+  if (out.response.kind === 'choice') {
+    out.response = { ...out.response, glyphs: scene.glyphs };
+  }
+  // O enunciado cita o alvo entre aspas; se for um símbolo, ele aparece
+  // desenhado ao lado da pergunta. Com mais de um citado, nenhum: mostrar
+  // apenas um seria pista de qual deles importa.
+  const citados = [...String(out.text).matchAll(/"([^"]+)"/g)]
+    .map((m) => scene.glyphs[m[1]])
+    .filter(Boolean);
+  if (citados.length === 1) out.symbol = citados[0];
+  return out;
+}
+
 /** Alternativas plausíveis: valores da própria cena, depois distratores. */
 function optionsAround(correct, pool, rng, size = 4) {
   const unique = [...new Set(pool.map((v) => String(v)))].filter((v) => v !== String(correct) && v !== '');
@@ -241,8 +262,9 @@ export function generateQueries(scene, { complexity = 1, rng = Math.random, avoi
   for (const kind of order.concat(rShuffle(rng, eligible))) {
     if (queries.length >= wanted) break;
     if (usedKinds.has(kind)) continue;
-    const built = BUILDERS[kind]?.(scene, rng);
-    if (!built) continue;
+    const raw = BUILDERS[kind]?.(scene, rng);
+    if (!raw) continue;
+    const built = attachGlyphs(scene, raw);
     if (built.targetId && usedTargets.has(built.targetId)) continue;
     usedKinds.add(kind);
     if (built.targetId) usedTargets.add(built.targetId);
@@ -252,7 +274,7 @@ export function generateQueries(scene, { complexity = 1, rng = Math.random, avoi
   // Cena pobre demais para o nível pedido: garante ao menos uma pergunta.
   if (!queries.length) {
     const fallback = BUILDERS.value(scene, rng) || BUILDERS.presence(scene, rng);
-    if (fallback) queries.push({ ...fallback, id: 'q0', index: 0 });
+    if (fallback) queries.push({ ...attachGlyphs(scene, fallback), id: 'q0', index: 0 });
   }
 
   return responseVariation > 0 ? varyResponses(queries, rng, responseVariation) : queries;

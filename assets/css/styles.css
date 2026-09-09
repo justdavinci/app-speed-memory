@@ -1394,3 +1394,5 @@ body.th-immersive .tabbar { display: none; }
 .th-sc__composite .th-sc__map,
 .th-sc__composite .th-sc__stage { aspect-ratio: 2 / 1; max-height: 20vh; }
 .th-sc__composite[data-parts="3"] .th-sc { font-size: .86em; }
+/* Opção com figura: o desenho manda, o nome fica embaixo como apoio. */
+.th-option__name { display: block; margin-top: 2px; font-size: .62rem; font-weight: 600; color: var(--muted); }

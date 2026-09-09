@@ -17,6 +17,7 @@ import { getModule } from './modules/index.js';
 import { MAX_TIER, TRANSFER_PRESETS, TRANSFER_TIERS } from './transfer/config.js';
 import { pressureSummary } from './transfer/adapt.js';
 import { holdoutTemplates } from './transfer/novelty.js';
+import { getFamily } from './transfer/families/index.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -529,7 +530,7 @@ function renderTransfer() {
     <div class="card">
       <h2 class="card__title">Modelos reservados desta faixa</h2>
       <div class="th-records">${reserved.map((t) => `<div class="th-record-row">
-        <span>${esc(t.label)}</span><span>${esc(t.familyId)}</span>
+        <span>${esc(t.label)}</span><span>${esc(getFamily(t.familyId)?.name || t.familyId)}</span>
       </div>`).join('') || '<p class="th-hint">Nenhum nesta faixa.</p>'}</div>
       <p class="chart__caption">Eles nunca aparecem em treino. Só assim dá para medir se a habilidade
         transferiu, em vez de medir prática no mesmo material.</p>

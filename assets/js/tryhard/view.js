@@ -491,6 +491,12 @@ function renderChoice(root, spec, done) {
       const o = ORIENTATIONS.find((x) => x.id === v);
       return barSvg({ degrees: o?.degrees ?? 0, size: 44 });
     }
+    // Opção que corresponde a uma figura mostra a figura e o nome: o texto
+    // sozinho obrigaria a traduzir o desenho em palavra para poder responder.
+    const glyph = spec.glyphs?.[v];
+    if (glyph) {
+      return `${symbolSvg(glyph, { size: 34 })}<span class="th-option__name">${esc(v)}</span>`;
+    }
     return itemMarkup(v, { symbols: spec.symbols, size: 40 });
   };
   root.innerHTML = `<div class="th-options">${spec.options.map((v) => (
