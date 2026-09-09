@@ -72,7 +72,11 @@
 html, body {
   margin: 0;
   height: 100%;
-  overscroll-behavior-y: none;
+  /* Só a área de conteúdo rola. Sem isto, a barra do navegador que some e
+     volta muda a altura da viewport, o documento inteiro passa a rolar e leva
+     o cabeçalho embora, deixando um vão embaixo da barra de abas. */
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -91,9 +95,12 @@ button { cursor: pointer; }
 /* ------------------------------- Layout -------------------------------- */
 
 .app {
+  /* Casca presa à viewport: nem `dvh`, que oscila com a barra do navegador,
+     nem altura maior que a tela. O que rola é apenas `.main`. */
+  position: fixed;
+  inset: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  height: 100dvh;
 }
 
 .topbar {
@@ -120,8 +127,10 @@ button { cursor: pointer; }
 }
 
 .main {
+  min-height: 0;              /* deixa a faixa encolher para poder rolar */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 16px 16px 28px;
 }
 
