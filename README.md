@@ -69,7 +69,7 @@ Uma área separada, para quem quer treinar percepção visual a sério. O treino
 comum continua igual: Try Hard é adicional, com motor próprio de dificuldade,
 temporização e estatísticas.
 
-**Nove exercícios e dois benchmarks**
+**Nove exercícios e quatro benchmarks**
 
 | Módulo | O que treina |
 | --- | --- |
@@ -84,6 +84,8 @@ temporização e estatísticas.
 | Modo Caos | Tudo muda a cada exposição — formato, quantidade, pergunta e formato de resposta. |
 | Daily Benchmark | Protocolo fixo de 20 tentativas para comparar dias diferentes. |
 | Transfer Benchmark | Protocolo fixo de 18 tentativas em material reservado, que nunca aparece no treino. |
+| Benchmark de Disponibilidade | Protocolo fixo de 24 tentativas que mede quão cedo a informação fica recuperável. |
+| Disponibilidade no Mundo Real | A mesma medida em material realista e reservado: listas, interfaces, documentos, mapas e cenas. |
 
 **Rotina diária editável.** A padrão soma 40 minutos em 7 exercícios. Dá para
 adicionar, remover, reordenar, mudar duração, dificuldade inicial e tipo de
@@ -175,6 +177,95 @@ transferência e Manual — deslocam faixa, fração de material inédito e
 profundidade das perguntas. Dá para travar a faixa, se você quiser ficar em um
 tipo de material.
 
+## Disponibilidade visual
+
+Depois que algo some da tela, ainda leva um tempo até aquela informação poder ser
+recuperada com precisão. Este treino, opcional, reduz progressivamente esse
+intervalo — e mede quanto ele encolheu.
+
+O ciclo de uma tentativa vira:
+
+```
+fixação → estímulo → tela neutra → atraso → pergunta → resposta
+```
+
+O app controla o atraso experimentalmente. Nada aqui depende de você apertar um
+botão quando "sentir" que terminou de processar: percepção subjetiva do próprio
+processamento é imprecisa demais para virar medida.
+
+**Escada adaptativa, separada da dificuldade.** Enquanto o motor de dificuldade
+mexe em exposição, quantidade e matriz, este mexe só no atraso. A decisão vem de
+uma janela de tentativas, nunca de uma só: acerto com folga encurta o intervalo,
+erro demais alonga, e dentro da região alvo ele fica onde está. O passo começa
+grosso e encolhe a cada virada — busca grossa para achar a região, busca fina
+para assentar dentro dela.
+
+**T80.** O intervalo pós-estímulo em que o acerto chega a 80% do seu teto recente
+naquele material. Sai de uma curva acerto × atraso ajustada sobre várias
+tentativas em vários atrasos, não de um acerto isolado. Com poucos dados o app
+diz "calibrando" em vez de inventar um número, e a confiança aparece junto
+(baixa, média, alta).
+
+**Por categoria, nunca um número só.** Uma cena natural leva naturalmente mais
+tempo que quatro dígitos — comparar os dois na mesma régua não diria nada. Os
+limiares ficam separados por material (números, letras, símbolos, matrizes,
+listas, interfaces, documentos, mapas, cenas, misturado), e a exposição fica
+registrada junto, porque T80 de 100 ms com exposição de 500 ms não é a mesma
+coisa que com 50 ms.
+
+**Duas métricas diferentes.** *Disponibilidade* é quando a informação fica
+recuperável; *tempo de recuperação* é quão rápido você responde depois de
+receber a deixa. Elas não são a mesma coisa e ficam registradas separadas. Há
+também uma calibração opcional do toque, que serve de contexto para a segunda —
+e não para subtrair da primeira.
+
+**Retrieval limpo.** Ver as alternativas junto com a pergunta ajuda a
+reconstruir a resposta. Com este modo ligado, a pergunta aparece sozinha e as
+alternativas entram 300 ms depois, separando recuperação de reconhecimento.
+
+**Onde funciona.** Nos exercícios do Try Hard em que o intervalo faz sentido —
+Partial Report, Iconic Readout, Peripheral Matrix, Abstract Flash, Mask
+Resistance, Peripheral Fixation — e no Mundo real inteiro. No Mask Resistance o
+intervalo até a máscara e o de disponibilidade são tempos diferentes e ficam
+registrados separados.
+
+**Ligar sem virar tudo.** Um interruptor geral manda em todos; cada exercício
+ainda pode herdar, ligar ou desligar. Os presets (Equilibrado, Intensivo, Máxima
+velocidade) definem em que fração das tentativas compatíveis o treino entra —
+nunca em todas, porque misturar tentativas normais é o que impede a adaptação ao
+formato. Há também modo manual, com atraso fixo ou sorteado numa faixa. Ligar a
+disponibilidade não aumenta a duração da rotina: muda a composição das
+tentativas dentro do mesmo tempo.
+
+**Lacuna de disponibilidade.** No Mundo real, o app compara o T80 no material já
+treinado com o T80 em material inédito. Quando a diferença cresce, a velocidade
+conquistada não está transferindo, e a recomendação passa a ser mais variedade —
+não mais pressa no que já é conhecido.
+
+**Enquanto o atraso procura o limiar, a exposição fica parada.** Encurtar as duas
+ao mesmo tempo tornaria impossível dizer se você passou a ver mais rápido ou
+apenas viu por menos tempo.
+
+Como o Iconic Throughput e o Índice de Mundo Real, o T80 é um índice interno do
+app: **uma medida funcional de desempenho no exercício, não uma medição direta
+da atividade neural**. A interface diz isso onde o número aparece.
+
+## Os três eixos
+
+O painel de progresso mostra três coisas diferentes, de propósito:
+
+| Eixo | Pergunta | Métrica |
+| --- | --- | --- |
+| Captura | Quanto consigo apreender numa exposição? | Iconic Throughput, melhor exposição |
+| Disponibilidade | Quão cedo consigo usar aquilo? | T80 por categoria |
+| Transferência | Isso funciona em algo novo? | Generalização, lacuna de transferência |
+
+Um recorde de exposição sozinho não diz nada sobre os outros dois. A partir
+desses eixos o app sugere o que treinar a seguir — captura alta com
+disponibilidade baixa pede mais disponibilidade; disponibilidade boa com
+transferência ruim pede mais material novo. São sugestões: a rotina continua
+sendo sua.
+
 ## Níveis
 
 São duas escalas de 7 níveis, uma para cada tipo de estímulo, porque ler custa
@@ -238,7 +329,7 @@ início" instala o app, que passa a funcionar offline.
 npm test
 ```
 
-183 testes sem dependências cobrindo as partes puras: geradores, concordância das
+226 testes sem dependências cobrindo as partes puras: geradores, concordância das
 frases, correção com e sem ordem, motor da sessão, escala de exposição, as duas
 escalas de nível, sorteio do intervalo, migração de ajustes antigos,
 estatísticas e a escada adaptativa — esta última verificada com pessoas
@@ -261,6 +352,17 @@ sorteio não repete nem deixa um modelo dominar a janela, que a lacuna só é
 calculada com tentativas dos dois lados, que o sobreajuste é detectado, que a
 faixa só sobe com desempenho em material novo e que o eixo da adaptação muda
 conforme a lacuna.
+
+Da Disponibilidade Visual, os testes cobrem o algoritmo e a pontuação: que uma
+tentativa isolada nunca mexe no atraso, que o passo encolhe a cada virada, que a
+escada respeita piso e teto e converge para perto do limiar de quem está
+respondendo, que o T80 relativo não depende do teto de desempenho, que poucos
+dados não viram T80, que a confiança acompanha a quantidade de dados, que o
+índice normaliza por categoria em vez de somar milissegundos, que o interruptor
+geral manda em todos os módulos, que nem toda tentativa compatível usa
+disponibilidade, que o atraso ocupa a vaga do aviso sem somar, que só a primeira
+pergunta conta para o limiar, que a exposição fica parada enquanto o atraso
+procura o limiar e que o benchmark mede sem mexer na escada de treino.
 
 ## Como as frases são geradas
 
@@ -302,6 +404,15 @@ assets/js/
     view.js                    desenho do estímulo e widgets de resposta
     ui.js                      telas de treino, módulos, mundo real, progresso e config
     modules/                   os exercícios e os dois benchmarks
+    curriculum.js              os três eixos e o que treinar a seguir
+    availability/
+      config.js                presets, categorias e limiares de disponibilidade
+      categories.js            a que categoria uma tentativa pertence
+      staircase.js             escada adaptativa do atraso pós-estímulo
+      threshold.js             curva acerto × atraso, T80, confiança e índice
+      motor.js                 linha de base do toque
+      index.js                 decisão por tentativa e leitura dos resultados
+      ui.js                    telas da disponibilidade
     transfer/
       config.js                faixas, presets e limiares de transferência
       scene.js                 esquema comum de cena (elementos com rótulo, valor, estado, posição)

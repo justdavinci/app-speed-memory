@@ -1,6 +1,6 @@
 // Service worker: cache do "app shell" para funcionar offline.
 // A versão no nome do cache invalida tudo quando os arquivos mudam.
-const CACHE = 'piscamemory-v3';
+const CACHE = 'piscamemory-v4';
 
 const SHELL = [
   './',
@@ -36,6 +36,16 @@ const SHELL = [
   './assets/js/tryhard/modules/visualThreshold.js',
   './assets/js/tryhard/modules/benchmark.js',
   './assets/js/tryhard/modules/realWorld.js',
+  './assets/js/tryhard/modules/availabilityBenchmark.js',
+  './assets/js/tryhard/modules/realWorldAvailability.js',
+  './assets/js/tryhard/curriculum.js',
+  './assets/js/tryhard/availability/config.js',
+  './assets/js/tryhard/availability/categories.js',
+  './assets/js/tryhard/availability/staircase.js',
+  './assets/js/tryhard/availability/threshold.js',
+  './assets/js/tryhard/availability/motor.js',
+  './assets/js/tryhard/availability/index.js',
+  './assets/js/tryhard/availability/ui.js',
   './assets/js/tryhard/modules/transferBenchmark.js',
   './assets/js/tryhard/transfer/config.js',
   './assets/js/tryhard/transfer/scene.js',

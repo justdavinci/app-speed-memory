@@ -14,6 +14,9 @@ import { evaluate, difficultyDelta, needsRecalibration, step } from './difficult
 import { calculateThroughput, detectFatigue, summarizeTrials } from './metrics.js';
 import * as store from './store.js';
 import { makeRng, rInt } from './rng.js';
+import * as availability from './availability/index.js';
+import { AVAILABILITY_CONFIG } from './availability/config.js';
+import { hasConverged } from './availability/staircase.js';
 
 /** Controle externo da sessão: pausar, encerrar. */
 export function createControl() {
@@ -134,6 +137,25 @@ export async function runModuleBlock(block, view, control, opts = {}) {
   // Módulos com estado próprio de bloco (o Real World Transfer guarda o motor
   // de novidade aqui) recebem um contexto criado uma vez e repassado adiante.
   const context = mod.beginBlock?.({ block, moduleId, settings, difficulty, rng, adaptive }) || null;
+
+  // Disponibilidade visual: escada própria, separada da dificuldade. O estado
+  // é por categoria de estímulo, então é carregado sob demanda.
+  const availabilitySettings = store.getAvailabilitySettings();
+  const availabilityOn = block.availability !== false
+    && availability.isActiveFor(availabilitySettings, moduleId);
+  const availabilityStates = new Map();
+  const availabilityTrials = new Map();
+  const availabilityUsed = new Set();
+  let warmupLeft = 0;
+
+  const availabilityStateOf = (category) => {
+    if (!availabilityStates.has(category)) {
+      availabilityStates.set(category, store.getAvailabilityState(category));
+      availabilityTrials.set(category, store.getAvailabilityTrials(category));
+    }
+    return availabilityStates.get(category);
+  };
+
   const trials = [];
   const startedAt = new Date().toISOString();
   const startMs = performance.now();
@@ -157,12 +179,37 @@ export async function runModuleBlock(block, view, control, opts = {}) {
     if (control.consumeResumed?.()) {
       await view.showCountdown(TRY_HARD_CONFIG.countdownSeconds, { name: spec.name });
       if (control.aborted) break;
+      // Depois de uma pausa as primeiras tentativas são de readaptação: contam
+      // como treino, mas ficam fora da conta do limiar (§66).
+      if (availabilityOn) warmupLeft = AVAILABILITY_CONFIG.warmupTrials;
     }
 
     const trialIndex = trials.length;
     const trial = mod.generate({ difficulty, stimulus, rng, settings, trialIndex, context });
     trial.moduleId = moduleId;
     trial.difficultyState = { ...difficulty };
+
+    // Um módulo pode chegar com o plano pronto (é o caso dos benchmarks, que
+    // ditam o atraso em vez de deixar a escada decidir).
+    if (availabilityOn && !trial.availability) {
+      const categoria = availability.categoryFor(trial);
+      const escada = availabilityStateOf(categoria);
+      const plano = availability.planTrial({
+        settings: availabilitySettings,
+        moduleId,
+        trial,
+        state: escada,
+        calibrated: escada.calibratedTrials || 0,
+        rng,
+        warmup: warmupLeft > 0,
+      });
+      availability.applyToTrial(trial, plano);
+      if (plano.active) {
+        trial.cleanRetrievalDelayMs = plano.cleanRetrieval
+          ? AVAILABILITY_CONFIG.cleanRetrievalOptionsDelayMs : 0;
+        if (warmupLeft > 0) warmupLeft -= 1;
+      }
+    }
 
     view.setProgress?.({
       trialIndex,
@@ -171,6 +218,12 @@ export async function runModuleBlock(block, view, control, opts = {}) {
       elapsedMs,
       difficulty,
       calibrating,
+      availability: trial.availability?.active ? {
+        delayMs: trial.availability.requestedDelayMs,
+        phase: trial.availability.phase,
+        t80: availabilityStates.get(trial.availability.category)?.smoothedT80 ?? null,
+        accuracy: availabilityStates.get(trial.availability.category)?.rollingAccuracy ?? null,
+      } : null,
     });
 
     const outcome = await runTrial({ trial, mod, view, control, settings, rng });
@@ -205,6 +258,10 @@ export async function runModuleBlock(block, view, control, opts = {}) {
       itemAccuracy: result.itemAccuracy,
       exact: result.exact,
       reactionMs: outcome.reactionMs,
+      // Tempo a partir do instante em que responder virou possível. É outra
+      // coisa que disponibilidade, e nunca substitui a estimativa dela (§17).
+      retrievalMs: outcome.reactionMs,
+      availabilityActualMs: outcome.availabilityTiming?.actualMs ?? null,
       throughput,
       difficulty: { ...difficulty },
       benchmarkBlock: trial.benchmarkBlock || null,
@@ -216,6 +273,31 @@ export async function runModuleBlock(block, view, control, opts = {}) {
     const saved = store.recordTrial(moduleId, record);
     if (saved.beaten.length) personalBests += 1;
     mod.onTrialRecorded?.({ trial, result, record, context });
+
+    // O benchmark mede sem ensinar: não mexe na escada nem entra no log de
+    // treino, senão o protocolo fixo contaminaria a adaptação (§72).
+    if (trial.availability?.active && trial.availability.phase !== 'benchmark') {
+      const categoria = trial.availability.category;
+      const entrada = availability.trialRecord({
+        trial, result, record, timing: outcome.availabilityTiming,
+      });
+      store.recordAvailabilityTrial(entrada);
+      availabilityUsed.add(categoria);
+
+      const log = availabilityTrials.get(categoria) || [];
+      log.push(entrada);
+      availabilityTrials.set(categoria, log);
+
+      const anterior = availabilityStateOf(categoria);
+      const emCalibracao = trial.availability.phase === 'calibration';
+      const decisao = availability.advance(anterior, log, availabilitySettings);
+      availabilityStates.set(categoria, {
+        ...decisao.state,
+        calibratedTrials: (anterior.calibratedTrials || 0) + (emCalibracao ? 1 : 0),
+        lastCalibrationAt: emCalibracao ? new Date().toISOString() : anterior.lastCalibrationAt,
+      });
+      store.updateAvailabilityState(categoria, availabilityStates.get(categoria));
+    }
     opts.onTrial?.(record, result);
 
     trialsSinceChange += 1;
@@ -224,7 +306,7 @@ export async function runModuleBlock(block, view, control, opts = {}) {
         moduleId,
         { state: difficulty, cursor, calibrating, trialsSinceChange },
         trials,
-        { order: mod.escalationOrder?.({ context, trials, difficulty }) || null },
+        { order: escalationOrder() },
       );
       calibrating = decision.calibrating;
       if (decision.changed) {
@@ -261,6 +343,58 @@ export async function runModuleBlock(block, view, control, opts = {}) {
 
   return finish();
 
+  /**
+   * Ordem de escalada da dificuldade. Enquanto a escada de disponibilidade
+   * ainda procura o limiar, a exposição fica parada: mexer nas duas ao mesmo
+   * tempo tornaria impossível dizer se a pessoa passou a ver mais rápido ou
+   * apenas viu por menos tempo (§49).
+   */
+  function escalationOrder() {
+    const base = mod.escalationOrder?.({ context, trials, difficulty }) || null;
+    if (!availabilityOn || !availabilityUsed.size) return base;
+    const procurando = [...availabilityUsed]
+      .some((c) => !hasConverged(availabilityStates.get(c) || {}));
+    if (!procurando) return base;
+    const ordem = base || MODULE_SPECS[moduleId]?.escalation || [];
+    const semExposicao = ordem.filter((k) => k !== 'exposureMs');
+    return semExposicao.length ? semExposicao : ordem;
+  }
+
+  /** Fecha as categorias tocadas e devolve o resumo de disponibilidade. */
+  function finishAvailability() {
+    if (!availabilityUsed.size) return null;
+    const categorias = {};
+    for (const categoria of availabilityUsed) {
+      const fechado = store.closeAvailabilityCategory(categoria);
+      categorias[categoria] = fechado;
+      if (fechado.t80 !== null) {
+        store.addAvailabilityPoint({
+          category: categoria,
+          t80: fechado.t80,
+          trials: fechado.trials,
+          accuracy: fechado.accuracy,
+          exposureMs: fechado.exposureMs,
+        });
+      }
+    }
+    const doBloco = [...availabilityUsed]
+      .flatMap((c) => availabilityTrials.get(c) || [])
+      .filter((t) => t.timestamp >= startedAt);
+    const rt = doBloco.map((t) => t.retrievalMs).filter((v) => typeof v === 'number' && v > 0);
+    const principal = Object.values(categorias).find((c) => c.t80 !== null) || null;
+    return {
+      categories: categorias,
+      trials: doBloco.length,
+      delaysMs: doBloco.map((t) => t.delayMs),
+      accuracy: doBloco.length ? doBloco.reduce((a, t) => a + (t.accuracy ?? 0), 0) / doBloco.length : null,
+      retrievalMs: rt.length ? Math.round(rt.reduce((a, b) => a + b, 0) / rt.length) : null,
+      t80: principal?.t80 ?? null,
+      smoothedT80: principal?.smoothedT80 ?? null,
+      bestStableT80: principal?.bestStableT80 ?? null,
+      confidence: principal?.confidence ?? 'baixa',
+    };
+  }
+
   function finish() {
     const summary = summarizeTrials(trials);
     const completedAt = new Date().toISOString();
@@ -285,6 +419,7 @@ export async function runModuleBlock(block, view, control, opts = {}) {
       protocolVersion: mod.protocolVersion || null,
       ...summary,
       ...(extra ? { transfer: extra } : {}),
+      ...(availabilityUsed.size ? { availability: finishAvailability() } : {}),
     };
   }
 }
@@ -309,14 +444,27 @@ async function runTrial({ trial, mod, view, control, settings, rng }) {
       await view.showMask(trial, trial.maskDurationMs, control.signal);
     }
 
-    if (trial.cueDelayMs) await view.waitBlank(trial.cueDelayMs, control.signal);
+    // Tela neutra entre o estímulo e a pergunta. Nada da pergunta pode estar
+    // visível aqui: o que se mede é o intervalo, não a leitura antecipada.
+    let availabilityTiming = null;
+    if (trial.cueDelayMs) {
+      const espera = await view.waitBlank(trial.cueDelayMs, control.signal);
+      if (trial.availability?.active) {
+        availabilityTiming = espera || { actualMs: trial.cueDelayMs };
+      }
+    }
     if (guard.invalid) return { invalid: true, reason: guard.reason };
 
     const response = await view.collectResponse(trial, control);
     if (response.aborted) return { aborted: true };
     if (guard.invalid) return { invalid: true, reason: guard.reason };
 
-    return { response: response.items, reactionMs: response.reactionMs, timing };
+    return {
+      response: response.items,
+      reactionMs: response.reactionMs,
+      timing,
+      availabilityTiming,
+    };
   } finally {
     guard.stop();
   }

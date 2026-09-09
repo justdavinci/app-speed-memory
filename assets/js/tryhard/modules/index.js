@@ -10,6 +10,8 @@ import abstractFlash from './abstractFlash.js';
 import visualThreshold from './visualThreshold.js';
 import realWorld, { chaosMode } from './realWorld.js';
 import transferBenchmark from './transferBenchmark.js';
+import availabilityBenchmark from './availabilityBenchmark.js';
+import realWorldAvailability from './realWorldAvailability.js';
 import benchmark from './benchmark.js';
 
 export const MODULES = {
@@ -23,6 +25,8 @@ export const MODULES = {
   'real-world': realWorld,
   'chaos-mode': chaosMode,
   'transfer-benchmark': transferBenchmark,
+  'availability-benchmark': availabilityBenchmark,
+  'real-world-availability': realWorldAvailability,
   benchmark,
 };
 
@@ -32,3 +36,5 @@ export function getModule(id) {
 
 export { BENCHMARK_PROTOCOL, BENCHMARK_TRIALS } from './benchmark.js';
 export { TRANSFER_BENCHMARK_PROTOCOL, TRANSFER_BENCHMARK_TRIALS } from './transferBenchmark.js';
+export { AVAILABILITY_BENCHMARK_PROTOCOL, AVAILABILITY_BENCHMARK_TRIALS } from './availabilityBenchmark.js';
+export { REAL_WORLD_AVAILABILITY_PROTOCOL, REAL_WORLD_AVAILABILITY_TRIALS } from './realWorldAvailability.js';

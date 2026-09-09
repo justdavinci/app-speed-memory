@@ -1396,3 +1396,25 @@ body.th-immersive .tabbar { display: none; }
 .th-sc__composite[data-parts="3"] .th-sc { font-size: .86em; }
 /* Opção com figura: o desenho manda, o nome fica embaixo como apoio. */
 .th-option__name { display: block; margin-top: 2px; font-size: .62rem; font-weight: 600; color: var(--muted); }
+/* Retrieval limpo: a deixa aparece sozinha antes das alternativas. */
+.th-question--cue { margin: auto 0; font-size: 1.05rem; opacity: .95; }
+
+/* --------------------- Disponibilidade visual --------------------- */
+
+.th-axes { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.th-axis {
+  padding: 12px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--line);
+}
+.th-axis__name { margin: 0; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.th-axis__level { margin: 2px 0 4px; font-size: 1.1rem; font-weight: 750; }
+.th-axis__line { margin: 0; font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.th-tip { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-elev-2); }
+.th-tip__title { margin: 0 0 2px; font-size: .88rem; font-weight: 700; }
+
+/* Ponto da calibração do toque: aparece e some, sem piscar a tela. */
+.av-dot { width: 84px; height: 84px; border-radius: 50%; background: var(--accent); }
+.th-mini.is-on { border-color: var(--accent); color: var(--accent); }

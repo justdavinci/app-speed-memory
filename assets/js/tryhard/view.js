@@ -141,7 +141,7 @@ export function createView(refs) {
       refs.sessionBar.hidden = total <= 1;
     },
 
-    setProgress({ trialsDone, budget, elapsedMs, difficulty, calibrating }) {
+    setProgress({ trialsDone, budget, elapsedMs, difficulty, calibrating, availability }) {
       const parts = [];
       if (budget.kind === 'time') {
         const left = Math.max(0, budget.durationMs - elapsedMs);
@@ -160,8 +160,14 @@ export function createView(refs) {
       refs.counter.textContent = parts.join(' · ');
       refs.metrics.hidden = !advanced;
       if (advanced) {
-        refs.metrics.textContent = `${getRefreshHz()} Hz · quadro ${getFrameMs().toFixed(1)} ms · `
-          + Object.entries(difficulty || {}).map(([k, v]) => `${k}=${v}`).join(' · ');
+        const linhas = [`${getRefreshHz()} Hz · quadro ${getFrameMs().toFixed(1)} ms`];
+        linhas.push(Object.entries(difficulty || {}).map(([k, v]) => `${k}=${v}`).join(' · '));
+        if (availability) {
+          linhas.push(`disponibilidade ${Math.round(availability.delayMs)} ms (${availability.phase})`
+            + (availability.t80 ? ` · T80 ${availability.t80} ms` : '')
+            + (availability.accuracy ? ` · janela ${Math.round(availability.accuracy * 100)}%` : ''));
+        }
+        refs.metrics.textContent = linhas.filter(Boolean).join(' · ');
       }
     },
 
@@ -213,9 +219,14 @@ export function createView(refs) {
       return timing;
     },
 
+    /**
+     * Tela neutra entre o estímulo e a pergunta. Devolve o tempo REAL: em
+     * atrasos curtos o que a tela entrega é múltiplo de quadro, e o registro
+     * precisa dizer o que aconteceu, não o que foi pedido.
+     */
     async waitBlank(ms, signal) {
       refs.stage.dataset.stage = 'blank';
-      await waitMs(ms, signal);
+      return waitMs(ms, signal);
     },
 
     async showMask(trial, durationMs, signal) {
@@ -270,7 +281,9 @@ export function createView(refs) {
 
     collectResponse(trial) {
       refs.stage.dataset.stage = 'response';
-      return collectResponse({ trial, promptEl, responseEl, interactive });
+      return collectResponse({
+        trial, promptEl, responseEl, interactive, wait: (ms) => waitMs(ms, signal()),
+      });
     },
 
     async showFeedback(result, trial, info) {
@@ -376,9 +389,22 @@ export function moduleSummaryMarkup(summary, next) {
  * Todos os widgets são de toque, grandes e sem teclado do sistema: entre o
  * flash e a resposta não pode haver nada lento.
  */
-function collectResponse({ trial, promptEl, responseEl, interactive }) {
+async function collectResponse({ trial, promptEl, responseEl, interactive, wait }) {
   const spec = trial.response;
   promptEl.textContent = spec.prompt || '';
+
+  // Retrieval limpo: primeiro só a deixa, as alternativas depois. Ver as
+  // opções junto com a pergunta ajuda a reconstruir a resposta, e aí a
+  // medida deixaria de ser recuperação e viraria reconhecimento (§15).
+  if (trial.cleanRetrievalDelayMs > 0 && wait) {
+    responseEl.innerHTML = `<p class="th-question th-question--cue">${esc(cueTextOf(trial))}</p>`;
+    const espera = await wait(trial.cleanRetrievalDelayMs);
+    responseEl.innerHTML = '';
+    if (espera?.aborted) return { items: [], reactionMs: 0, aborted: true };
+  }
+
+  // O cronômetro da resposta começa quando responder vira possível — nem
+  // antes da deixa, nem antes das alternativas.
   const started = performance.now();
 
   return interactive((finish) => {
@@ -398,6 +424,13 @@ function collectResponse({ trial, promptEl, responseEl, interactive }) {
       default: return done([]);
     }
   });
+}
+
+/** A deixa mostrada sozinha no retrieval limpo. */
+function cueTextOf(trial) {
+  const spec = trial.response;
+  if (spec.kind === 'questions') return spec.questions?.[0]?.text || spec.prompt || '';
+  return spec.prompt || '';
 }
 
 function chipButton(value, symbols) {

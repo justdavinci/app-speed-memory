@@ -18,6 +18,9 @@ import { MAX_TIER, TRANSFER_PRESETS, TRANSFER_TIERS } from './transfer/config.js
 import { pressureSummary } from './transfer/adapt.js';
 import { holdoutTemplates } from './transfer/novelty.js';
 import { getFamily } from './transfer/families/index.js';
+import * as availabilityUi from './availability/ui.js';
+import { cognitiveState, levelOf, recommendations } from './curriculum.js';
+import { moduleSupportsAvailability } from './availability/config.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -31,6 +34,7 @@ const state = {
   control: null,
   view: null,
   draftRoutine: null,
+  availabilityCategory: null,
 };
 
 let hooks = {};
@@ -43,6 +47,11 @@ const tile = (value, label, modifier = '') => `<div class="tile ${modifier}">
   </div>`;
 
 const minutesLabel = (m) => `${m} min`;
+
+/** Escolha de disponibilidade de um módulo: herdar, ligado ou desligado. */
+function availabilityChoice(moduleId) {
+  return store.getAvailabilitySettings().modules?.[moduleId] || 'inherit';
+}
 
 function routineTotalMinutes(routine) {
   return routine.modules.reduce((a, m) => a + (m.minutes || 0), 0);
@@ -299,6 +308,8 @@ function openQuickTrain(moduleId) {
         </div>
       </div>` : ''}
 
+      ${availabilityUi.moduleField(moduleId)}
+
       <div class="field" id="th-manual-fields" hidden>
         ${dims.map((d) => manualField(d, stats.difficulty?.[d.key] ?? d.start)).join('')}
       </div>`}
@@ -333,6 +344,7 @@ function openQuickTrain(moduleId) {
       : 'Adaptativa: o app persegue 70–85% de acerto.';
   });
   pickGroup('th-quick-stimulus', 'stimulus', 'stimulus');
+  availabilityUi.bindModuleField(moduleId, sheet);
 
   $$('[data-manual]', sheet).forEach((input) => {
     input.addEventListener('input', () => {
@@ -514,6 +526,8 @@ function renderTransfer() {
       </div>
     </div>
 
+    ${availabilityUi.transferCard()}
+
     <div class="card">
       <h2 class="card__title">Transfer Benchmark</h2>
       <p class="th-hint">Protocolo fixo em modelos reservados — material que nunca aparece no treino.
@@ -540,6 +554,7 @@ function renderTransfer() {
 }
 
 function bindTransferEvents() {
+  availabilityUi.bindTransferCard({ render });
   $$('[data-transfer-train]').forEach((btn) => {
     btn.addEventListener('click', () => openQuickTrain(btn.dataset.transferTrain));
   });
@@ -643,6 +658,9 @@ function renderProgress() {
       <p class="chart__caption">Variação do desempenho no exercício, não do seu cérebro.</p>
     </div>` : ''}
 
+    ${axesCard()}
+    ${availabilityUi.progressCards({ range: state.range, category: state.availabilityCategory })}
+
     <div class="card">
       <h2 class="card__title">Consistência de treino</h2>
       ${heatmapMarkup(store.getDailySeries(null, 0))}
@@ -655,7 +673,52 @@ function renderProgress() {
       render();
     });
   });
+  availabilityUi.bindProgress((categoria) => {
+    state.availabilityCategory = categoria;
+    render();
+  });
   bindRangeChips();
+}
+
+/**
+ * Os três eixos lado a lado. Separados de propósito: captura, disponibilidade
+ * e transferência medem coisas diferentes, e um número só esconderia qual
+ * delas está travando o progresso.
+ */
+function axesCard() {
+  const estado = cognitiveState();
+  const d = estado.detail;
+  const eixo = (valor, titulo, linhas) => `<div class="th-axis">
+      <p class="th-axis__name">${esc(titulo)}</p>
+      <p class="th-axis__level">${esc(levelOf(valor))}</p>
+      ${linhas.map((l) => `<p class="th-axis__line">${esc(l)}</p>`).join('')}
+    </div>`;
+
+  const dicas = recommendations(estado).map((r) => `<div class="th-tip">
+      <p class="th-tip__title">${esc(r.title)}</p>
+      <p class="th-hint">${esc(r.text)}</p>
+    </div>`).join('');
+
+  return `<div class="card">
+      <h2 class="card__title">Onde você está</h2>
+      <div class="th-axes">
+        ${eixo(estado.capture, 'Captura', [
+          `throughput ${d.throughput || '—'}`,
+          `melhor exposição ${formatMs(d.bestExposureMs)}`,
+        ])}
+        ${eixo(estado.availability, 'Disponibilidade', [
+          `índice ${d.availabilityScore === null ? '—' : d.availabilityScore}`,
+          `T80 realista ${formatMs(d.transferT80)}`,
+        ])}
+        ${eixo(estado.transfer, 'Transferência', [
+          `generalização ${d.generalization === null ? '—' : pct(d.generalization)}`,
+          `faixa ${d.tier}`,
+        ])}
+      </div>
+      <p class="chart__caption">Quanto você capta, quão cedo consegue usar e se isso funciona
+        em material novo. São três coisas diferentes.</p>
+      ${dicas}
+    </div>`;
 }
 
 function heatmapMarkup(series) {
@@ -700,6 +763,9 @@ function renderConfig() {
               `<option value="${t}"${block.stimulus === t ? ' selected' : ''}>${esc(STIMULUS_TYPES[t].label)}</option>`
             )).join('')}
           </select>
+          ${moduleSupportsAvailability(block.moduleId) ? `<button class="th-mini${availabilityChoice(block.moduleId) === 'off' ? '' : ' is-on'}"
+            data-av-row="${i}" data-module="${block.moduleId}"
+            aria-label="Disponibilidade visual" title="Disponibilidade visual">⏱</button>` : ''}
           <button class="th-mini th-mini--danger" data-remove="${i}" aria-label="Remover">✕</button>
         </div>
       </div>`;
@@ -755,6 +821,8 @@ function renderConfig() {
       )).join('')}
     </div>
 
+    ${availabilityUi.configCard()}
+
     <div class="card card--soft">
       <h2 class="card__title">Calibração</h2>
       <p class="th-hint">Cada módulo aprende o seu nível nas primeiras tentativas. Recalibrar zera essa estimativa.</p>
@@ -802,6 +870,19 @@ function bindConfigEvents(routine) {
     if (recalibrate) {
       store.recalibrate(recalibrate.dataset.recalibrate);
       hooks.toast?.(`${MODULE_SPECS[recalibrate.dataset.recalibrate].name} recalibrado.`);
+      return;
+    }
+
+    // Alterna a disponibilidade daquele exercício entre herdar e desligado.
+    const avRow = e.target.closest('[data-av-row]');
+    if (avRow) {
+      const moduleId = avRow.dataset.module;
+      const proximo = availabilityChoice(moduleId) === 'off' ? 'inherit' : 'off';
+      store.setAvailabilityForModule(moduleId, proximo);
+      hooks.toast?.(proximo === 'off'
+        ? `Disponibilidade desligada em ${MODULE_SPECS[moduleId].name}.`
+        : `Disponibilidade herda o ajuste geral em ${MODULE_SPECS[moduleId].name}.`);
+      renderConfig();
     }
   });
 
@@ -861,6 +942,44 @@ function bindConfigEvents(routine) {
   });
 
   $('#th-show-onboarding').addEventListener('click', () => showOnboarding(true));
+
+  availabilityUi.bindConfig({
+    render: renderConfig,
+    toast: (m) => hooks.toast?.(m),
+    intro: () => availabilityUi.showIntro($('#th-onboarding'), (calibrar) => {
+      renderConfig();
+      if (calibrar) startMotorBaseline();
+    }),
+    motor: startMotorBaseline,
+  });
+}
+
+/**
+ * Calibração do toque. Usa o overlay do treino porque é a única tela do app
+ * preparada para apresentar e cronometrar sem nada em volta.
+ */
+function startMotorBaseline() {
+  if (state.running) return;
+  const overlay = $('#th-play');
+  overlay.hidden = false;
+  document.body.classList.add('th-immersive');
+  hooks.setChromeHidden?.(true);
+  $('#th-module-name').textContent = 'Calibração do toque';
+  $('#th-position').hidden = true;
+  $('#th-counter').textContent = '';
+
+  const refs = { center: $('#th-center'), prompt: $('#th-prompt'), response: $('#th-response') };
+  const sessao = availabilityUi.runMotorBaseline(refs, {
+    toast: (m) => hooks.toast?.(m),
+    onDone: () => {
+      overlay.hidden = true;
+      document.body.classList.remove('th-immersive');
+      hooks.setChromeHidden?.(false);
+      render();
+    },
+  });
+  const sair = () => { $('#th-quit').removeEventListener('click', sair); sessao.stop(); };
+  $('#th-quit').addEventListener('click', sair);
 }
 
 /* ------------------------------ onboarding ------------------------------- */
@@ -1009,6 +1128,7 @@ function showSessionResult(session) {
           </div>`).join('')}
       </div>
       ${transferResultMarkup(session)}
+      ${availabilityUi.sessionSummary(session)}
       <button class="btn btn--primary btn--lg" data-result="close">Concluir</button>
     </div>`;
   result.onclick = (e) => {
