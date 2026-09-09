@@ -2,8 +2,8 @@
 //
 // Disponibilidade pergunta "quão cedo a informação já pode ser usada?" e
 // tenta REDUZIR o atraso. Retenção pergunta "por quanto tempo ela continua
-// utilizável?" e tenta AUMENTAR o atraso. Os dois logs e estados são separados
-// para que segundos de espera nunca contaminem o T80 de disponibilidade.
+// utilizável?" e tenta AUMENTAR o atraso. Logs e estados são separados para
+// que segundos de espera nunca contaminem o T80 de disponibilidade.
 
 import { moduleSupportsAvailability } from './availability/config.js';
 import { categoryFor } from './availability/categories.js';
@@ -35,8 +35,13 @@ export const DEFAULT_RETENTION_SETTINGS = {
   rangeMaxMs: 5000,
 };
 
+// Nesta primeira versão Retenção significa manutenção em branco. Mask
+// Resistance já injeta interferência antes da pergunta, portanto mede outro
+// construto e fica reservado para um futuro eixo de Interference Resistance.
+const RETENTION_EXCLUDED_MODULES = new Set(['mask-resistance']);
 const STORAGE_KEY = 'speedmemory.retention.v1';
 const memory = new Map();
+let cache = null;
 let backend = {
   getItem(k) {
     try {
@@ -50,7 +55,6 @@ let backend = {
     try { localStorage.setItem(k, v); } catch (_) { /* ignore */ }
   },
 };
-let cache = null;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -91,7 +95,6 @@ function save(data = cache) {
   return data;
 }
 
-/** Backend em memória para a suíte. */
 export function setRetentionBackendForTesting(custom) {
   backend = custom || {
     store: new Map(),
@@ -124,7 +127,10 @@ export function resolveRetentionSettings(settings) {
 
 export function retentionActiveFor(moduleId, settings = getRetentionSettings()) {
   const s = resolveRetentionSettings(settings);
-  return !!s.enabled && s.share > 0 && moduleSupportsAvailability(moduleId);
+  return !!s.enabled
+    && s.share > 0
+    && moduleSupportsAvailability(moduleId)
+    && !RETENTION_EXCLUDED_MODULES.has(moduleId);
 }
 
 function allowedLadder(s) {
@@ -171,7 +177,9 @@ export function getRetentionState(category) {
 export function updateRetentionState(category, patch) {
   const data = load();
   data.categories[category] = {
-    ...getRetentionState(category), ...patch, updatedAt: new Date().toISOString(),
+    ...getRetentionState(category),
+    ...patch,
+    updatedAt: new Date().toISOString(),
   };
   save(data);
   return data.categories[category];
@@ -201,7 +209,6 @@ export function retentionDelay(settings, state, rng = Math.random) {
   return state?.currentDelayMs ?? initialRetentionState(s).currentDelayMs;
 }
 
-/** Decide se esta tentativa vira retenção e qual intervalo usa. */
 export function planRetentionTrial({ settings, state, rng = Math.random, warmup = false, force = false }) {
   const s = resolveRetentionSettings(settings);
   if (!force && (!s.enabled || rng() >= s.share)) return { active: false };
@@ -293,14 +300,19 @@ export function getRetentionTrials(category) {
   return (load().trials[category] || []).map(expandTrial);
 }
 
-/** Escada inversa à disponibilidade: acerto alto alonga o atraso. */
+/** Escada inversa à Availability: desempenho alto alonga o intervalo. */
 export function advanceRetention(state, trials, settings) {
   const s = resolveRetentionSettings(settings);
   const base = { ...(state || initialRetentionState(s)) };
   if (s.mode !== 'adaptive') return { state: base, changed: false, decision: 'hold' };
 
-  const valid = trials.filter((t) => !t.invalid && !t.warmup).slice(-RETENTION_CONFIG.rollingWindow);
-  if (valid.length < RETENTION_CONFIG.rollingWindow) return { state: base, changed: false, decision: 'hold' };
+  const valid = trials
+    .filter((t) => !t.invalid && !t.warmup)
+    .slice(-RETENTION_CONFIG.rollingWindow);
+  if (valid.length < RETENTION_CONFIG.rollingWindow) {
+    return { state: base, changed: false, decision: 'hold' };
+  }
+
   const acc = mean(valid.map((t) => t.accuracy)) ?? 0;
   base.rollingAccuracy = acc;
   base.trialsSinceChange = (base.trialsSinceChange || 0) + 1;
@@ -312,9 +324,11 @@ export function advanceRetention(state, trials, settings) {
   let idx = nearestIndex(ladder, base.currentDelayMs);
   let decision = 'hold';
   if (acc >= s.targetAccuracy + RETENTION_CONFIG.upperMargin && idx < ladder.length - 1) {
-    idx += 1; decision = 'longer';
+    idx += 1;
+    decision = 'longer';
   } else if (acc <= s.targetAccuracy - RETENTION_CONFIG.lowerMargin && idx > 0) {
-    idx -= 1; decision = 'shorter';
+    idx -= 1;
+    decision = 'shorter';
   }
   if (decision === 'hold') return { state: base, changed: false, decision };
   base.currentDelayMs = ladder[idx];
@@ -323,15 +337,16 @@ export function advanceRetention(state, trials, settings) {
 }
 
 /**
- * Estima Retention T80: maior atraso em que a curva ainda cruza ~80%.
- * Usa actualDelayMs quando disponível e interpola o primeiro cruzamento de
- * cima para baixo. É deliberadamente conservador e devolve null com poucos
- * dados, em vez de fabricar precisão.
+ * Retention T80 = maior atraso em que a curva ainda cruza aproximadamente
+ * 80% de acerto. Usa o atraso realmente entregue quando existe.
  */
 export function estimateRetentionT80(trials, target = RETENTION_CONFIG.targetAccuracy) {
-  const valid = trials.filter((t) => !t.invalid && !t.warmup && typeof (t.actualDelayMs ?? t.delayMs) === 'number');
+  const valid = trials.filter((t) => !t.invalid
+    && !t.warmup
+    && typeof (t.actualDelayMs ?? t.delayMs) === 'number');
+  const accuracy = mean(valid.map((t) => t.accuracy));
   if (valid.length < RETENTION_CONFIG.minTrialsForEstimate) {
-    return { t80: null, confidence: 'baixa', trials: valid.length, accuracy: mean(valid.map((t) => t.accuracy)) };
+    return { t80: null, confidence: 'baixa', trials: valid.length, accuracy };
   }
 
   const buckets = new Map();
@@ -344,7 +359,7 @@ export function estimateRetentionT80(trials, target = RETENTION_CONFIG.targetAcc
     .map(([delayMs, xs]) => ({ delayMs, accuracy: mean(xs), n: xs.length }))
     .sort((a, b) => a.delayMs - b.delayMs);
   if (levels.length < RETENTION_CONFIG.minLevelsForEstimate) {
-    return { t80: null, confidence: 'baixa', trials: valid.length, accuracy: mean(valid.map((t) => t.accuracy)), levels };
+    return { t80: null, confidence: 'baixa', trials: valid.length, accuracy, levels };
   }
 
   let t80 = null;
@@ -363,15 +378,18 @@ export function estimateRetentionT80(trials, target = RETENTION_CONFIG.targetAcc
     if (passing.length) t80 = passing[passing.length - 1].delayMs;
   }
 
-  const confidence = valid.length >= 30 && levels.length >= 5 ? 'alta'
+  const confidence = valid.length >= 30 && levels.length >= 5
+    ? 'alta'
     : valid.length >= 18 && levels.length >= 4 ? 'média' : 'baixa';
-  return { t80, confidence, trials: valid.length, accuracy: mean(valid.map((t) => t.accuracy)), levels };
+  return { t80, confidence, trials: valid.length, accuracy, levels };
 }
 
 export function retentionReport(trials, state, settings) {
   const s = resolveRetentionSettings(settings);
   const est = estimateRetentionT80(trials, s.targetAccuracy);
-  const rt = trials.map((t) => t.retrievalMs).filter((v) => typeof v === 'number' && v > 0);
+  const rt = trials
+    .map((t) => t.retrievalMs)
+    .filter((v) => typeof v === 'number' && v > 0);
   return {
     ...est,
     currentDelayMs: state?.currentDelayMs ?? null,
@@ -385,7 +403,8 @@ export function closeRetentionCategory(category) {
   const state = getRetentionState(category);
   const trials = getRetentionTrials(category);
   const report = retentionReport(trials, state, getRetentionSettings());
-  const smoothed = report.t80 === null ? state.smoothedT80
+  const smoothed = report.t80 === null
+    ? state.smoothedT80
     : state.smoothedT80 === null || state.smoothedT80 === undefined
       ? report.t80
       : Math.round(state.smoothedT80 * 0.65 + report.t80 * 0.35);
@@ -423,8 +442,13 @@ export function getRetentionReport() {
   for (const category of Object.keys(data.trials)) {
     const trials = getRetentionTrials(category);
     if (!trials.length) continue;
-    categories[category] = retentionReport(trials, data.categories[category] || null, data.settings);
+    categories[category] = retentionReport(
+      trials,
+      data.categories[category] || null,
+      data.settings,
+    );
   }
+
   const valid = Object.values(categories).filter((c) => c.t80 !== null);
   if (!valid.length) {
     const anyState = Object.values(data.categories)[0] || null;
@@ -436,11 +460,16 @@ export function getRetentionReport() {
       settings: data.settings,
     };
   }
+
   const weighted = valid.reduce((a, c) => a + c.t80 * Math.max(1, c.trials), 0)
     / valid.reduce((a, c) => a + Math.max(1, c.trials), 0);
-  const confidence = valid.every((c) => c.confidence === 'alta') ? 'alta'
+  const confidence = valid.every((c) => c.confidence === 'alta')
+    ? 'alta'
     : valid.some((c) => c.confidence === 'baixa') ? 'baixa' : 'média';
-  const current = valid.map((c) => c.currentDelayMs).filter((v) => typeof v === 'number');
+  const current = valid
+    .map((c) => c.currentDelayMs)
+    .filter((v) => typeof v === 'number');
+
   return {
     t80: Math.round(weighted),
     currentDelayMs: current.length ? Math.round(mean(current)) : null,
@@ -450,7 +479,7 @@ export function getRetentionReport() {
   };
 }
 
-/** Pontuação interna 0–100: logarítmica, usada só como resumo do perfil. */
+/** Pontuação interna 0–100, logarítmica. Não é QI. */
 export function retentionPoints(t80) {
   if (t80 === null || t80 === undefined || t80 <= 0) return null;
   const lo = 250;
