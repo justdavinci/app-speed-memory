@@ -803,6 +803,11 @@ test('importHistory rejeita conteúdo que não é lista', () => {
   assert.throws(() => importHistory({ oops: true }), /lista de sessões/);
 });
 
+/* ------------------------------- Try Hard ------------------------------- */
+
+const tryhard = await import('./tryhard.js');
+tryhard.register({ test, group, assert });
+
 /* -------------------------------- fecho --------------------------------- */
 
 console.log(`\n${passed} testes passaram, ${failed} falharam.`);

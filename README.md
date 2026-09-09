@@ -63,6 +63,57 @@ segue pela outra.
 - O resultado mostra o seu nível, a maior quantidade que você acertou por inteiro
   e como você foi em cada dificuldade.
 
+## Try Hard — treino avançado
+
+Uma área separada, para quem quer treinar percepção visual a sério. O treino
+comum continua igual: Try Hard é adicional, com motor próprio de dificuldade,
+temporização e estatísticas.
+
+**Sete exercícios e um benchmark**
+
+| Módulo | O que treina |
+| --- | --- |
+| Partial Report | Capturar a cena inteira antes de saber o que será pedido. A região só é revelada depois que a matriz some. |
+| Mask Resistance | Recuperar a informação apesar de uma máscara visual logo após o estímulo. |
+| Peripheral Matrix | Apreender uma matriz inteira em uma exposição curta demais para leitura serial. |
+| Iconic Readout | Consultar uma cena que já desapareceu, respondendo perguntas de categorias variadas. |
+| Peripheral Fixation | Perceber itens ao redor sem largar o ponto de fixação central. |
+| Abstract Flash | Memória visual com símbolos sem nome fácil, reduzindo o apoio verbal. |
+| Visual Threshold | Discriminar orientação com contraste e tamanho reduzidos. |
+| Daily Benchmark | Protocolo fixo de 20 tentativas para comparar dias diferentes. |
+
+**Rotina diária editável.** A padrão soma 40 minutos em 6 exercícios. Dá para
+adicionar, remover, reordenar, mudar duração, dificuldade inicial e tipo de
+estímulo, e restaurar a original. A sessão encadeia os exercícios sem voltar ao
+menu, com resumo entre um e outro.
+
+**Dificuldade adaptativa multidimensional.** Cada módulo tem estado próprio de
+habilidade. A adaptação persegue a faixa de 70% a 85% de acerto analisando uma
+janela de 8 tentativas — nunca uma tentativa isolada — e mexe em **uma dimensão
+por vez** (exposição, quantidade de itens, tamanho da matriz, atraso do aviso,
+intervalo até a máscara, distância periférica, contraste), para que sempre se
+saiba o que ficou mais difícil. Há também modo manual, presets (Aquecimento,
+Try Hard, Insano) e recalibração por módulo.
+
+**Temporização honesta.** Toda exposição passa por um motor central sincronizado
+com os quadros da tela, que registra a duração pedida e a **duração real**. Nada
+promete precisão abaixo do que o aparelho entrega: um tempo menor que um quadro
+é apresentado por um quadro e registrado como tal. Se a aba perde o foco ou a
+tela gira durante a apresentação, a tentativa é **descartada**, não contada como
+erro.
+
+**Iconic Throughput.** Índice próprio de 0 a 1000 que combina itens recuperados,
+exposição (em escala logarítmica limitada nas duas pontas) e complexidade do
+estímulo. A fórmula fica em uma única função documentada, em
+`assets/js/tryhard/metrics.js`. É uma métrica interna do app para acompanhar
+evolução, não uma medida científica validada.
+
+**Progresso.** Painel com throughput, melhor exposição, precisão, tempo de
+treino e tentativas; gráficos por módulo com filtros de 7, 30, 90 dias e tudo;
+comparação com ontem e com as médias recentes; calendário de consistência; e
+recordes com critério — exposição só vira recorde com pelo menos 80% de
+precisão.
+
 ## Níveis
 
 São duas escalas de 7 níveis, uma para cada tipo de estímulo, porque ler custa
@@ -126,13 +177,20 @@ início" instala o app, que passa a funcionar offline.
 npm test
 ```
 
-82 testes sem dependências cobrindo as partes puras: geradores, concordância das
+144 testes sem dependências cobrindo as partes puras: geradores, concordância das
 frases, correção com e sem ordem, motor da sessão, escala de exposição, as duas
 escalas de nível, sorteio do intervalo, migração de ajustes antigos,
 estatísticas e a escada adaptativa — esta última verificada com pessoas
 simuladas, conferindo que o teto de 30 séries é respeitado, que tempo e
 quantidade se alternam, que a escada não desce abaixo do piso do aparelho e que
 memórias e velocidades diferentes produzem resultados diferentes.
+
+Do Try Hard, os testes cobrem o motor de dificuldade (sobe, desce, não oscila,
+respeita limites e o intervalo mínimo entre mudanças), o cálculo de precisão,
+throughput e consistência, os geradores (máscara que não vaza a resposta,
+benchmark sem sequências compressíveis, posições periféricas dentro da área),
+os oito módulos, a persistência e a sessão inteira — iniciada, pausada,
+encerrada e salva — rodando com uma interface falsa, sem navegador.
 
 ## Como as frases são geradas
 
@@ -162,6 +220,18 @@ assets/js/
   charts.js                    gráficos em SVG puro
   perception.js                escala de exposição e as duas escalas de nível
   adaptive.js                  escada do teste de velocidade
+  tryhard/
+    config.js                  protocolos, alvos e dimensões de dificuldade
+    timing.js                  exposição sincronizada com os quadros da tela
+    difficulty.js              adaptação multidimensional
+    metrics.js                 precisão, throughput, consistência e recordes
+    stimuli.js                 geradores de matriz, máscara, aviso e posições
+    symbols.js                 símbolos abstratos em SVG
+    store.js                   rotinas, sessões, tentativas e agregados
+    runner.js                  ciclo de tentativa e encadeamento da sessão
+    view.js                    desenho do estímulo e widgets de resposta
+    ui.js                      telas de treino, módulos, progresso e config
+    modules/                   os oito exercícios
   util.js                      utilidades (sorteio, normalização de texto, formatação)
   generators/
     digits.js                  sequências numéricas
