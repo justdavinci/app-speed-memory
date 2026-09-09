@@ -1,12 +1,13 @@
 // Service worker: cache do "app shell" para funcionar offline.
 // A versão no nome do cache invalida tudo quando os arquivos mudam.
-const CACHE = 'piscamemory-v4';
+const CACHE = 'piscamemory-v5';
 
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './assets/css/styles.css',
+  './assets/css/tryhard-enhancements.css',
   './assets/js/app.js',
   './assets/js/util.js',
   './assets/js/storage.js',
@@ -26,6 +27,10 @@ const SHELL = [
   './assets/js/tryhard/runner.js',
   './assets/js/tryhard/view.js',
   './assets/js/tryhard/ui.js',
+  './assets/js/tryhard/retention.js',
+  './assets/js/tryhard/retentionUi.js',
+  './assets/js/tryhard/processingProfile.js',
+  './assets/js/tryhard/processingProfileUi.js',
   './assets/js/tryhard/modules/index.js',
   './assets/js/tryhard/modules/partialReport.js',
   './assets/js/tryhard/modules/maskResistance.js',
@@ -86,9 +91,6 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Responde do cache na hora e busca a versão nova em segundo plano, que fica
-// valendo na próxima abertura. Cache puro deixaria quem já usa o app preso na
-// versão antiga a cada atualização; rede pura tiraria o funcionamento offline.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
@@ -96,15 +98,12 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(request);
-
     const fromNetwork = fetch(request)
       .then((response) => {
         if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
         return response;
       })
       .catch(() => null);
-
-    // Com cache, a atualização segue sozinha; sem cache, espera a rede.
     if (cached) {
       event.waitUntil(fromNetwork);
       return cached;
