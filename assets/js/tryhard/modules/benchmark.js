@@ -13,7 +13,6 @@ import peripheralMatrix from './peripheralMatrix.js';
 import abstractFlash from './abstractFlash.js';
 import iconicReadout from './iconicReadout.js';
 
-/** Protocolo v1: quatro blocos de cinco tentativas, sempre nesta ordem. */
 export const BENCHMARK_PROTOCOL = {
   version: TRY_HARD_CONFIG.benchmarkProtocolVersion,
   blocks: [
@@ -86,9 +85,7 @@ export default {
   },
 
   score(trial, given) {
-    return trial.score
-      ? trial.score(trial, given)
-      : comparePositional(trial.expected, given);
+    return trial.score ? trial.score(trial, given) : comparePositional(trial.expected, given);
   },
 
   onTrialRecorded({ trial, result, record, context }) {
@@ -110,12 +107,15 @@ export default {
 
   finishBlock({ context }) {
     if (!context?.profileTrials?.length) return null;
-    const run = {
+    recordBenchmarkProfile({
       protocolVersion: BENCHMARK_PROTOCOL.version,
       completedAt: new Date().toISOString(),
       trials: context.profileTrials,
-    };
-    recordBenchmarkProfile(run);
-    return { profileBenchmark: run };
+    });
+    // A persistência acima é side-effect deliberado. Não devolvemos payload
+    // porque o runner reserva `finishBlock()` para resumos específicos do
+    // módulo (Transfer usa esse canal) e não queremos o benchmark parecer
+    // resultado de transferência.
+    return null;
   },
 };
