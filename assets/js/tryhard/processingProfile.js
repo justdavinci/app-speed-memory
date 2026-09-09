@@ -8,11 +8,63 @@
 import * as store from './store.js';
 import { getRetentionReport, retentionPoints } from './retention.js';
 
+const PROFILE_KEY = 'speedmemory.processing-profile.v1';
+const profileMemory = new Map();
+let profileBackend = {
+  getItem(k) {
+    try {
+      const v = localStorage.getItem(k);
+      if (v !== null) return v;
+    } catch (_) { /* ignore */ }
+    return profileMemory.get(k) ?? null;
+  },
+  setItem(k, v) {
+    profileMemory.set(k, v);
+    try { localStorage.setItem(k, v); } catch (_) { /* ignore */ }
+  },
+};
+
 const clamp100 = (v) => Math.max(0, Math.min(100, Math.round(v)));
 const pct = (v) => `${Math.round(v * 100)}%`;
 const ms = (v) => (v === null || v === undefined ? '—' : v >= 1000
   ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1).replace('.', ',')} s`
   : `${Math.round(v)} ms`);
+
+function readProfileStore() {
+  const raw = profileBackend.getItem(PROFILE_KEY);
+  if (!raw) return { benchmarkRuns: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    return { benchmarkRuns: Array.isArray(parsed.benchmarkRuns) ? parsed.benchmarkRuns : [] };
+  } catch (_) {
+    return { benchmarkRuns: [] };
+  }
+}
+
+function writeProfileStore(data) {
+  profileBackend.setItem(PROFILE_KEY, JSON.stringify(data));
+}
+
+export function setProcessingProfileBackendForTesting(custom) {
+  profileBackend = custom || {
+    store: new Map(),
+    getItem(k) { return this.store.has(k) ? this.store.get(k) : null; },
+    setItem(k, v) { this.store.set(k, v); },
+  };
+}
+
+/** Guarda a evidência fixa dos quatro blocos do Daily Benchmark. */
+export function recordBenchmarkProfile(run) {
+  const data = readProfileStore();
+  data.benchmarkRuns.push(run);
+  if (data.benchmarkRuns.length > 40) data.benchmarkRuns.splice(0, data.benchmarkRuns.length - 40);
+  writeProfileStore(data);
+  return run;
+}
+
+export function getBenchmarkProfileRuns() {
+  return readProfileStore().benchmarkRuns;
+}
 
 function confidenceFromN(n) {
   if (n >= 20) return 'alta';
@@ -21,8 +73,8 @@ function confidenceFromN(n) {
 }
 
 function benchmarkComponent(block, name, description, evidenceLabel) {
-  const trials = store.getTrials('benchmark')
-    .filter((t) => !t.invalid && t.benchmarkBlock === block && t.protocolVersion);
+  const runs = getBenchmarkProfileRuns().slice(-4);
+  const trials = runs.flatMap((r) => r.trials || []).filter((t) => t.block === block);
   if (!trials.length) {
     return { id: block, name, points: null, confidence: 'sem dados', raw: 'rode o Daily Benchmark', description };
   }
@@ -56,7 +108,7 @@ export function processingProfile() {
     benchmarkComponent(
       'matrix', 'Apreensão paralela',
       'Quanto da informação distribuída numa matriz é capturada em uma única exposição.',
-      (t) => `${t.difficulty?.matrixRows || 3}×${t.difficulty?.matrixColumns || 3} · ${ms(t.actualExposureMs ?? t.requestedExposureMs)}`,
+      (t) => `${t.rows || 3}×${t.cols || 3} · ${ms(t.actualExposureMs ?? t.requestedExposureMs)}`,
     ),
     benchmarkComponent(
       'symbols', 'Codificação não verbal',
@@ -66,7 +118,7 @@ export function processingProfile() {
     benchmarkComponent(
       'readout', 'Readout icônico',
       'Recuperação de uma cena depois que ela some e antes de saber exatamente o que será cobrado.',
-      (t) => `${ms(t.actualExposureMs ?? t.requestedExposureMs)} · cue ${ms(t.difficulty?.cueDelayMs || 0)}`,
+      (t) => `${ms(t.actualExposureMs ?? t.requestedExposureMs)} · cue ${ms(t.cueDelayMs || 0)}`,
     ),
     {
       id: 'availability',
@@ -84,7 +136,7 @@ export function processingProfile() {
       points: retentionPoints(retention.t80),
       confidence: retention.t80 === null ? 'sem dados' : retention.confidence,
       raw: retention.t80 === null
-        ? 'ative o modo Retenção'
+        ? 'ative o treino de retenção'
         : `Retention T80 ${ms(retention.t80)} · atual ${ms(retention.currentDelayMs)}`,
       description: 'Por quanto tempo a representação continua utilizável antes da recuperação. Maior T80 é melhor.',
     },
