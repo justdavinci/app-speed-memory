@@ -48,7 +48,7 @@ export function element(data) {
 export function createScene({
   familyId, templateId, templateLabel, tier, title = '', elements = [],
   layout = {}, html = '', variant = {}, distractors = [], queryKinds = null,
-  attributeNoun = 'a situação',
+  attributeNoun = 'a situação', glyphs = null,
 }) {
   return {
     familyId,
@@ -60,6 +60,8 @@ export function createScene({
     distractors,
     queryKinds,
     attributeNoun,
+    // Nome citado em texto → símbolo desenhado, quando a cena é de figuras.
+    glyphs,
     layout: { kind: 'free', rows: null, cols: null, ...layout },
     variant,
     html,
