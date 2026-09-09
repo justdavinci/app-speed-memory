@@ -44,6 +44,9 @@ function peripheralMarkup(trial) {
 export function stimulusMarkup(trial) {
   const symbols = trial.stimulusType === 'symbols' || trial.stimulusType === 'shapes';
   switch (trial.render?.kind) {
+    // Cenas do Real World Transfer chegam com a marcação já montada pela
+    // família de estímulo: aqui só entra na camada, sem remontar nada.
+    case 'scene': return `<div class="th-scene-wrap">${trial.sceneHtml || ''}</div>`;
     case 'matrix': return matrixMarkup(trial.matrix, { symbols });
     case 'sequence': return sequenceMarkup(trial.items, { symbols: false });
     case 'peripheral': return peripheralMarkup(trial);
@@ -54,9 +57,39 @@ export function stimulusMarkup(trial) {
   }
 }
 
+/**
+ * Reduz a cena até caber na área do estímulo. Roda antes da exposição, com o
+ * estímulo ainda escondido, então não custa nada no instante crítico.
+ */
+function fitScene(layer) {
+  const scene = layer.querySelector('.th-sc');
+  if (!scene) return;
+  const box = layer.getBoundingClientRect();
+  if (!box.width || !box.height) return;
+
+  // A cena já pode vir com escala da variação de contexto: medir o retângulo
+  // renderizado leva isso em conta; o scroll cobre o conteúdo que transbordou.
+  const current = Number(scene.style.getPropertyValue('--sc-scale')) || 1;
+  const rect = scene.getBoundingClientRect();
+  const width = Math.max(rect.width, scene.scrollWidth * current);
+  const height = Math.max(rect.height, scene.scrollHeight * current);
+  if (!width || !height) return;
+
+  const ratio = Math.min(1, (box.width - 4) / width, (box.height - 4) / height);
+  if (ratio >= 0.999) return;
+  scene.style.setProperty('--sc-scale', String(Math.max(0.45, current * ratio)));
+}
+
 function maskMarkup(trial) {
   const mask = trial.mask;
   if (!mask) return '';
+  // Máscara de cena: cobre a área inteira, porque o estímulo também cobria.
+  if (mask.kind === 'scene') {
+    const cells = Array.from({ length: 36 }, (_, i) => (
+      `<span>${esc(mask.chars[i % mask.chars.length] || '#')}</span>`
+    )).join('');
+    return `<div class="th-scene-mask">${cells}</div>`;
+  }
   const cls = mask.kind === 'noise' ? ' th-sequence--noise' : '';
   return `<div class="th-sequence${cls}">${mask.chars.map((c) => `<span>${esc(c)}</span>`).join('')}</div>`;
 }
@@ -158,6 +191,9 @@ export function createView(refs) {
       layer.style.visibility = 'hidden';
       // Força o cálculo de layout agora, fora da janela crítica.
       void layer.offsetHeight;
+      // Cenas grandes são reduzidas até caber. Melhor uma cena menor do que
+      // uma cena cortada: informação fora da tela não foi apresentada.
+      if (trial.render?.kind === 'scene') fitScene(layer);
       return {
         show: () => { layer.style.visibility = 'visible'; },
         hide: () => { layer.style.visibility = 'hidden'; },

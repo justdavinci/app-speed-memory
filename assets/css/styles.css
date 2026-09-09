@@ -763,6 +763,15 @@ button { cursor: pointer; }
 /* ------------------------------ Histórico ------------------------------ */
 
 .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+/* As seções do Try Hard são navegação, não filtro: precisam caber todas na
+   tela, senão a última fica escondida atrás de uma rolagem que ninguém vê. */
+.chips--tabs { gap: 4px; }
+.chips--tabs .chip {
+  padding: 8px clamp(3px, 2.2vw, 10px);
+  font-size: clamp(.66rem, 3.1vw, .82rem);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
 
 .chip {
   flex: none;
@@ -1175,3 +1184,213 @@ body.th-immersive .tabbar { display: none; }
   .th-play { padding: 24px 32px; }
   .th-response { max-width: 520px; margin: auto auto 0; }
 }
+
+/* ------------------------- Real World Transfer -------------------------- */
+
+/* As cenas são desenhadas dentro da camada do estímulo, que é absoluta: elas
+   precisam caber sozinhas, sem empurrar layout e sem rolar. */
+.th-scene-wrap {
+  width: min(100%, 460px);
+  max-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0 8px;
+}
+
+.th-sc {
+  --sc-scale: 1;
+  --sc-ink: var(--text);
+  --sc-paper: var(--bg-elev);
+  --sc-line: var(--line);
+  --sc-accent: var(--accent);
+  width: 100%;
+  transform: scale(var(--sc-scale));
+  background: var(--sc-paper);
+  color: var(--sc-ink);
+  border: 1px solid var(--sc-line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: clamp(.78rem, 3.4vw, .98rem);
+  line-height: 1.32;
+  text-align: left;
+}
+.th-sc[data-align="right"] { text-align: right; }
+.th-sc[data-dense="1"] { padding: 6px 8px; font-size: clamp(.72rem, 3.1vw, .9rem); }
+.th-sc[data-palette="contraste"] { --sc-paper: var(--text); --sc-ink: var(--bg); --sc-line: var(--muted); }
+.th-sc[data-palette="quente"] { --sc-paper: var(--bg-elev-2); --sc-accent: var(--warn); }
+.th-sc[data-palette="frio"] { --sc-paper: var(--bg-elev-2); --sc-accent: var(--accent-2); }
+
+.th-sc__title { font-weight: 700; margin-bottom: 6px; color: var(--sc-accent); }
+/* Dentro de uma cena quem manda na cor do símbolo é a cena, não o tema:
+   a paleta de contraste inverte o papel e o traço precisa acompanhar. */
+.th-sc .th-symbol { color: inherit; }
+
+.th-sc__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  gap: clamp(4px, 2vw, 12px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  font-size: clamp(1rem, 6vw, 1.9rem);
+  text-align: center;
+}
+.th-sc__cell { display: grid; place-items: center; min-height: 1.1em; }
+.th-sc__cell.is-empty { opacity: 0; }
+
+.th-sc__rows, .th-sc__list { display: grid; gap: 2px; }
+.th-sc__row, .th-sc__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sc-ink) 5%, transparent);
+}
+.th-sc__row[data-accent="1"] { background: color-mix(in srgb, var(--sc-accent) 18%, transparent); }
+.th-sc__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-sc__value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.th-sc__tag {
+  font-size: .72em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--sc-line);
+  color: var(--sc-ink);
+  opacity: .85;
+  white-space: nowrap;
+}
+.th-sc__badge {
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.6em;
+  text-align: center;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--sc-accent);
+  color: var(--bg);
+}
+.th-sc__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sc-accent); flex: none; }
+.th-sc__switch {
+  width: 26px; height: 15px; border-radius: 999px; flex: none;
+  border: 1px solid var(--sc-line); position: relative; background: transparent;
+}
+.th-sc__switch::after {
+  content: ""; position: absolute; top: 1px; left: 1px;
+  width: 11px; height: 11px; border-radius: 50%; background: var(--sc-ink);
+}
+.th-sc__switch[data-on="1"] { background: var(--sc-accent); }
+.th-sc__switch[data-on="1"]::after { left: auto; right: 1px; background: var(--bg); }
+
+.th-sc__chrome { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.th-sc__bullet { width: 10px; height: 10px; border-radius: 3px; background: var(--sc-accent); }
+.th-sc__chrome-title { font-weight: 700; }
+
+.th-sc__tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.th-sc__tab {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 999px; border: 1px solid var(--sc-line);
+}
+.th-sc__tab.is-active { border-color: var(--sc-accent); background: color-mix(in srgb, var(--sc-accent) 16%, transparent); }
+
+.th-sc__doc-head { font-weight: 800; letter-spacing: .02em; }
+.th-sc__doc-sub { font-size: .78em; opacity: .75; margin-bottom: 6px; }
+.th-sc__table { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 2px 8px; }
+.th-sc__th { font-weight: 800; font-size: .78em; text-transform: uppercase; opacity: .8; }
+.th-sc__td { font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-sc__td--num { text-align: right; }
+.th-sc__doc-total {
+  display: flex; justify-content: space-between; font-weight: 800;
+  border-top: 1px dashed var(--sc-line); margin-top: 6px; padding-top: 4px;
+}
+
+.th-sc__card { display: flex; gap: 10px; align-items: flex-start; }
+.th-sc__card-photo {
+  width: 44px; height: 52px; flex: none; display: grid; place-items: center;
+  border-radius: 6px; background: var(--sc-accent); color: var(--bg); font-weight: 800;
+}
+.th-sc__card-fields, .th-sc__form { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.th-sc__field, .th-sc__form-field { display: flex; gap: 6px; align-items: baseline; }
+.th-sc__field b, .th-sc__form-field span:first-child { font-size: .76em; opacity: .75; min-width: 62px; }
+.th-sc__input { flex: 1; border-bottom: 1px solid var(--sc-line); font-weight: 700; }
+
+.th-sc__ticket { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; position: relative; }
+.th-sc__ticket-cell { display: grid; }
+.th-sc__ticket-cell b { font-size: .72em; opacity: .7; font-weight: 600; }
+.th-sc__ticket-stub {
+  grid-column: 1 / -1; text-align: center; font-family: ui-monospace, monospace;
+  letter-spacing: .22em; border-top: 1px dashed var(--sc-line); padding-top: 4px;
+}
+
+.th-sc__map { width: 100%; aspect-ratio: 1 / 1; max-height: 46vh; display: block; }
+.th-sc__node-label { font-size: 4.2px; fill: var(--sc-ink); font-weight: 600; }
+.th-sc__legend { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; font-size: .76em; }
+.th-sc__legend-item { display: inline-flex; align-items: center; gap: 4px; }
+.th-sc__legend-item i { width: 10px; height: 10px; border-radius: 3px; }
+
+.th-sc__shelf { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 6px; }
+.th-sc__stage { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 44vh; }
+.th-sc__object { display: grid; place-items: center; gap: 2px; text-align: center; }
+.th-sc__object b { font-weight: 600; font-size: .72em; }
+.th-sc__object i { line-height: 0; }
+.th-sc__object[data-state="desligado"] i, .th-sc__object[data-state="vazio"] i { opacity: .4; }
+.th-sc__object[data-state="fechado"] b { text-decoration: underline; }
+.th-sc__object--free { position: absolute; transform: translate(-50%, -50%); }
+
+.th-sc__composite { display: flex; flex-direction: column; gap: 8px; }
+.th-sc__block { min-width: 0; }
+.th-sc__block + .th-sc__block { border-top: 1px solid var(--sc-line); padding-top: 6px; }
+.th-sc__block .th-sc { border: none; padding: 0; background: transparent; transform: none; }
+
+.th-scene-mask {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  width: min(100%, 420px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: clamp(1rem, 6vw, 1.8rem);
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ------------------------- painel do Mundo real ------------------------- */
+
+.th-tiers { display: grid; gap: 4px; }
+.th-tier {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 9px; border-radius: var(--radius-sm);
+  background: var(--bg-elev-2); opacity: .55;
+}
+.th-tier.is-done { opacity: .85; }
+.th-tier.is-now { opacity: 1; outline: 1px solid var(--accent); }
+.th-tier__n {
+  width: 24px; height: 24px; flex: none; display: grid; place-items: center;
+  border-radius: 8px; background: var(--bg-elev); font-weight: 800; font-size: .8rem;
+}
+.th-tier.is-now .th-tier__n { background: var(--accent); color: #fff; }
+.th-tier__main { display: grid; min-width: 0; }
+.th-tier__name { font-weight: 700; font-size: .9rem; }
+.th-tier__blurb { font-size: .76rem; color: var(--muted); }
+
+.th-big-line { margin: 0; font-size: 1.05rem; font-weight: 700; }
+.th-warn {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--text);
+  font-size: .84rem;
+}
+.th-result__transfer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* Blocos do formato misturado ficam um pouco menores: são dois ou três
+   pedaços na mesma exposição e precisam caber juntos. */
+.th-sc__composite .th-sc { font-size: .92em; }
+/* Dentro do formato misturado, mapas e cenas cedem altura: são um pedaço da
+   exposição, não a exposição inteira. */
+.th-sc__composite .th-sc__map,
+.th-sc__composite .th-sc__stage { aspect-ratio: 2 / 1; max-height: 20vh; }
+.th-sc__composite[data-parts="3"] .th-sc { font-size: .86em; }

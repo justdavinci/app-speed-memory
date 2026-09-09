@@ -4,6 +4,8 @@
 // janelas de análise, degraus de dificuldade e o que cada módulo pode variar.
 // Mexer no treino é mexer neste arquivo, não caçar constantes pela interface.
 
+import { GENERALIZATION_ESCALATION, RAW_ESCALATION } from './transfer/config.js';
+
 /** Degraus de exposição, em ms. A adaptação anda por índice, não por subtração. */
 export const EXPOSURE_LADDER = [
   8, 10, 13, 16, 20, 25, 30, 40, 50, 65, 80, 100,
@@ -64,6 +66,7 @@ export const STIMULUS_TYPES = {
   mixed: { id: 'mixed', label: 'Números + letras', weight: 1.3 },
   symbols: { id: 'symbols', label: 'Símbolos abstratos', weight: 1.5 },
   shapes: { id: 'shapes', label: 'Formas', weight: 1.4 },
+  scenes: { id: 'scenes', label: 'Material do mundo real', weight: 1.6 },
 };
 
 export const PRESETS = {
@@ -195,6 +198,55 @@ export const MODULE_SPECS = {
     ],
     escalation: ['contrast', 'exposureMs', 'itemScale', 'contrast'],
   },
+  'real-world': {
+    id: 'real-world',
+    name: 'Real World Transfer',
+    blurb: 'Do símbolo solto ao material que você encontra fora do app.',
+    defaultMinutes: 8,
+    stimulusTypes: ['scenes'],
+    defaultStimulus: 'scenes',
+    dimensions: [
+      exposure(400),
+      count('tier', 0, 0, 6, 'Faixa'),
+      count('informationDensity', 5, 3, 12, 'Informação na cena'),
+      count('queryComplexity', 1, 1, 4, 'Profundidade da pergunta'),
+      delay('retentionDelayMs', 0, 'Espera até a pergunta', 'up'),
+      count('interferenceLevel', 0, 0, 3, 'Interferência'),
+      ratio('responseVariation', 0.2, 0, 1, 0.2, 'Variação da resposta', 'up'),
+      ratio('contextualVariation', 0.3, 0.15, 1, 0.15, 'Variação de contexto', 'up'),
+    ],
+    escalation: RAW_ESCALATION,
+  },
+  'chaos-mode': {
+    id: 'chaos-mode',
+    name: 'Modo Caos',
+    blurb: 'Tudo muda a cada exposição: formato, quantidade, pergunta e resposta.',
+    defaultMinutes: 5,
+    stimulusTypes: ['scenes'],
+    defaultStimulus: 'scenes',
+    dimensions: [
+      exposure(300),
+      count('tier', 2, 0, 6, 'Faixa'),
+      count('informationDensity', 6, 3, 12, 'Informação na cena'),
+      count('queryComplexity', 2, 1, 4, 'Profundidade da pergunta'),
+      delay('retentionDelayMs', 80, 'Espera até a pergunta', 'up'),
+      count('interferenceLevel', 1, 0, 3, 'Interferência'),
+      ratio('responseVariation', 0.8, 0, 1, 0.2, 'Variação da resposta', 'up'),
+      ratio('contextualVariation', 0.9, 0.15, 1, 0.15, 'Variação de contexto', 'up'),
+    ],
+    escalation: GENERALIZATION_ESCALATION,
+  },
+  'transfer-benchmark': {
+    id: 'transfer-benchmark',
+    name: 'Transfer Benchmark',
+    blurb: 'Protocolo fixo em material reservado, para medir transferência.',
+    defaultMinutes: 3,
+    adaptive: false,
+    stimulusTypes: ['scenes'],
+    defaultStimulus: 'scenes',
+    dimensions: [],
+    escalation: [],
+  },
   benchmark: {
     id: 'benchmark',
     name: 'Daily Benchmark',
@@ -216,11 +268,12 @@ export const DEFAULT_ROUTINE = {
   name: 'Rotina padrão',
   isDefault: true,
   modules: [
-    { moduleId: 'partial-report', minutes: 12, preset: 'tryhard', adaptive: true, stimulus: 'mixed' },
-    { moduleId: 'peripheral-matrix', minutes: 8, preset: 'tryhard', adaptive: true, stimulus: 'digits' },
-    { moduleId: 'mask-resistance', minutes: 7, preset: 'tryhard', adaptive: true, stimulus: 'digits' },
-    { moduleId: 'abstract-flash', minutes: 6, preset: 'tryhard', adaptive: true, stimulus: 'symbols' },
-    { moduleId: 'iconic-readout', minutes: 5, preset: 'tryhard', adaptive: true, stimulus: 'mixed' },
+    { moduleId: 'partial-report', minutes: 10, preset: 'tryhard', adaptive: true, stimulus: 'mixed' },
+    { moduleId: 'peripheral-matrix', minutes: 7, preset: 'tryhard', adaptive: true, stimulus: 'digits' },
+    { moduleId: 'mask-resistance', minutes: 6, preset: 'tryhard', adaptive: true, stimulus: 'digits' },
+    { moduleId: 'real-world', minutes: 8, preset: 'tryhard', adaptive: true, stimulus: 'scenes' },
+    { moduleId: 'abstract-flash', minutes: 4, preset: 'tryhard', adaptive: true, stimulus: 'symbols' },
+    { moduleId: 'iconic-readout', minutes: 3, preset: 'tryhard', adaptive: true, stimulus: 'mixed' },
     { moduleId: 'benchmark', minutes: 2, preset: 'tryhard', adaptive: false, stimulus: 'mixed' },
   ],
 };
@@ -235,5 +288,5 @@ export const DEFAULT_TRY_HARD_SETTINGS = {
   immersive: true,
   advancedMetrics: false,
   onboarded: false,
-  stimulusTypes: { digits: true, letters: true, mixed: true, symbols: true, shapes: true },
+  stimulusTypes: { digits: true, letters: true, mixed: true, symbols: true, shapes: true, scenes: true },
 };

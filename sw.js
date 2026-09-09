@@ -1,6 +1,6 @@
 // Service worker: cache do "app shell" para funcionar offline.
 // A versão no nome do cache invalida tudo quando os arquivos mudam.
-const CACHE = 'piscamemory-v2';
+const CACHE = 'piscamemory-v3';
 
 const SHELL = [
   './',
@@ -35,6 +35,24 @@ const SHELL = [
   './assets/js/tryhard/modules/abstractFlash.js',
   './assets/js/tryhard/modules/visualThreshold.js',
   './assets/js/tryhard/modules/benchmark.js',
+  './assets/js/tryhard/modules/realWorld.js',
+  './assets/js/tryhard/modules/transferBenchmark.js',
+  './assets/js/tryhard/transfer/config.js',
+  './assets/js/tryhard/transfer/scene.js',
+  './assets/js/tryhard/transfer/queries.js',
+  './assets/js/tryhard/transfer/novelty.js',
+  './assets/js/tryhard/transfer/metrics.js',
+  './assets/js/tryhard/transfer/adapt.js',
+  './assets/js/tryhard/transfer/vocab.js',
+  './assets/js/tryhard/transfer/families/index.js',
+  './assets/js/tryhard/transfer/families/util.js',
+  './assets/js/tryhard/transfer/families/symbolGrid.js',
+  './assets/js/tryhard/transfer/families/structuredInfo.js',
+  './assets/js/tryhard/transfer/families/interfacePanel.js',
+  './assets/js/tryhard/transfer/families/documentFragment.js',
+  './assets/js/tryhard/transfer/families/mapDiagram.js',
+  './assets/js/tryhard/transfer/families/sceneLayout.js',
+  './assets/js/tryhard/transfer/families/composite.js',
   './assets/js/generators/digits.js',
   './assets/js/generators/words.js',
   './assets/js/generators/sentences.js',

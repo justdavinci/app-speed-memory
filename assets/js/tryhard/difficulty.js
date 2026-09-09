@@ -70,9 +70,11 @@ export function atLimit(dim, value, direction) {
  * Sobe ou desce a dificuldade em uma dimensão, seguindo a ordem de escalada do
  * módulo. `cursor` guarda em que ponto da ordem a adaptação parou.
  */
-export function step(moduleId, state, direction, cursor = 0, steps = 1) {
+export function step(moduleId, state, direction, cursor = 0, steps = 1, orderOverride = null) {
   const spec = MODULE_SPECS[moduleId];
-  const order = spec?.escalation?.length ? spec.escalation : dimensionsOf(moduleId).map((d) => d.key);
+  const declared = spec?.escalation?.length ? spec.escalation : dimensionsOf(moduleId).map((d) => d.key);
+  // Alguns módulos decidem a ordem em tempo de execução (ver transfer/adapt.js).
+  const order = orderOverride?.length ? orderOverride : declared;
   if (!order.length) return { state, cursor, changed: null };
 
   const next = { ...state };
@@ -108,9 +110,10 @@ export function rollingAccuracy(trials, window) {
  *
  * @param {object} skill estado do módulo: { state, cursor, trialsSinceChange, calibrating, trialsDone }
  * @param {Array} trials tentativas da sessão, mais recente por último
+ * @param {object} [options] { order } — ordem de escalada decidida pelo módulo
  * @returns {{state, cursor, decision:'harder'|'easier'|'hold'|'wait', accuracy:number|null, changed:object|null, calibrating:boolean}}
  */
-export function evaluate(moduleId, skill, trials) {
+export function evaluate(moduleId, skill, trials, options = {}) {
   const cfg = TRY_HARD_CONFIG;
   const calibrating = !!skill.calibrating;
   const window = calibrating ? cfg.calibrationWindow : cfg.rollingWindow;
@@ -135,7 +138,7 @@ export function evaluate(moduleId, skill, trials) {
   else if (accuracy <= cfg.decreaseBelow) direction = 'easier';
   if (!direction) return { ...base, decision: 'hold' };
 
-  const moved = step(moduleId, skill.state, direction, skill.cursor || 0, steps);
+  const moved = step(moduleId, skill.state, direction, skill.cursor || 0, steps, options.order || null);
   return {
     ...base,
     state: moved.state,

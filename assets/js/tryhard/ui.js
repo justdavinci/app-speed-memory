@@ -14,6 +14,9 @@ import { createControl, runRoutineSession } from './runner.js';
 import { createView } from './view.js';
 import { getFrameMs, getRefreshHz, measureFrameMs } from './timing.js';
 import { getModule } from './modules/index.js';
+import { MAX_TIER, TRANSFER_PRESETS, TRANSFER_TIERS } from './transfer/config.js';
+import { pressureSummary } from './transfer/adapt.js';
+import { holdoutTemplates } from './transfer/novelty.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -68,7 +71,7 @@ function renderTabs() {
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-selected', String(active));
   });
-  for (const name of ['today', 'modules', 'progress', 'config']) {
+  for (const name of ['today', 'modules', 'transfer', 'progress', 'config']) {
     $(`#th-panel-${name}`).hidden = name !== state.tab;
   }
 }
@@ -77,6 +80,7 @@ export function render() {
   renderTabs();
   if (state.tab === 'today') renderToday();
   if (state.tab === 'modules') renderModules();
+  if (state.tab === 'transfer') renderTransfer();
   if (state.tab === 'progress') renderProgress();
   if (state.tab === 'config') renderConfig();
 }
@@ -388,6 +392,197 @@ function manualValueLabel(moduleId, key, raw) {
   if (!dim) return String(raw);
   const value = dim.kind === 'ladder' ? dim.values[raw] : raw;
   return manualValueLabelFromDim(dim, value);
+}
+
+/* ------------------------------- mundo real ------------------------------ */
+
+function tierLadderMarkup(tier) {
+  return `<div class="th-tiers">${TRANSFER_TIERS.map((t) => {
+    const stateClass = t.tier < tier ? ' is-done' : t.tier === tier ? ' is-now' : '';
+    return `<div class="th-tier${stateClass}">
+        <span class="th-tier__n">${t.tier}</span>
+        <span class="th-tier__main">
+          <span class="th-tier__name">${esc(t.name)}</span>
+          <span class="th-tier__blurb">${esc(t.blurb)}</span>
+        </span>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function familyRowsMarkup(families) {
+  if (!families.length) return '<p class="th-hint">Ainda sem tentativas de transferência.</p>';
+  return `<div class="th-records">${families.map((f) => `<div class="th-record-row">
+      <span>${esc(f.name)}</span>
+      <span>${f.trials} · ${pct(f.accuracy)}${f.novelAccuracy === null ? '' : ` · novo ${pct(f.novelAccuracy)}`}</span>
+    </div>`).join('')}</div>`;
+}
+
+function gapLabel(gap) {
+  if (gap === null || gap === undefined) return '—';
+  const sign = gap >= 0 ? '' : '−';
+  return `${sign}${Math.abs(Math.round(gap * 100))} pp`;
+}
+
+function renderTransfer() {
+  const report = store.getTransferReport();
+  const settings = store.getTransferSettings();
+  const tier = report.tier;
+  const pressure = pressureSummary(store.getTransferTrials());
+  const reserved = holdoutTemplates(tier);
+  const benchmarks = store.getTransferBenchmarks();
+  const last = benchmarks[benchmarks.length - 1] || null;
+
+  $('#th-panel-transfer').innerHTML = `
+    <div class="card th-card--main">
+      <p class="th-kicker">Real World Transfer</p>
+      <h2 class="th-big">${report.realWorldIndex}</h2>
+      <p class="th-hint">Índice de Mundo Real · faixa ${tier} de ${MAX_TIER} — ${esc(TRANSFER_TIERS[tier].name)}</p>
+      <div class="row row--wrap">
+        <button class="btn btn--primary" data-transfer-train="real-world">Treinar transferência</button>
+        <button class="btn btn--ghost" data-transfer-train="chaos-mode">Modo Caos</button>
+      </div>
+    </div>
+
+    <div class="tiles">
+      ${tile(report.generalization === null ? '—' : pct(report.generalization), 'generalização')}
+      ${tile(gapLabel(report.transferGap), 'lacuna de transferência')}
+      ${tile(report.novelAccuracy === null ? '—' : pct(report.novelAccuracy), 'acerto em material novo')}
+      ${tile(report.trainedAccuracy === null ? '—' : pct(report.trainedAccuracy), 'acerto no já treinado')}
+      ${tile(report.novelTrials, 'tentativas novas')}
+      ${tile(report.trials, 'tentativas na janela')}
+    </div>
+    <p class="chart__caption">A lacuna é a diferença entre acertar no material já treinado e no material novo.
+      Quanto menor, mais a habilidade sobrevive fora do formato de treino. São índices internos do app,
+      não medidas científicas validadas.</p>
+
+    <div class="card">
+      <h2 class="card__title">O que o treino está fazendo</h2>
+      <p class="th-big-line">${esc(pressure.label)}</p>
+      <p class="th-hint">${esc(pressure.reason)}</p>
+      ${report.overfit.overfit ? `<p class="th-warn">O desempenho está preso ao material treinado
+        (${gapLabel(report.overfit.gap)} de diferença). O currículo já está variando mais o material
+        em vez de encurtar o tempo.</p>` : ''}
+    </div>
+
+    <div class="card">
+      <h2 class="card__title">Escada de material</h2>
+      ${tierLadderMarkup(tier)}
+      <p class="chart__caption">A faixa só sobe com bom desempenho em material que você ainda não treinou.</p>
+    </div>
+
+    <div class="card">
+      <h2 class="card__title">Por formato</h2>
+      ${familyRowsMarkup(report.families)}
+      <p class="chart__caption">"novo" é o acerto em modelos inéditos ou reservados daquele formato.</p>
+    </div>
+
+    <div class="card">
+      <h2 class="card__title">Pressão de transferência</h2>
+      <div class="segmented" id="th-transfer-preset">
+        ${Object.values(TRANSFER_PRESETS).map((p) => (
+          `<button class="segmented__opt" data-transfer-preset="${p.id}"
+            aria-checked="${settings.preset === p.id}" role="radio">${esc(p.label)}</button>`
+        )).join('')}
+      </div>
+      <p class="field__hint" id="th-transfer-preset-hint">${esc(TRANSFER_PRESETS[settings.preset]?.blurb || '')}</p>
+
+      <div id="th-transfer-custom" ${settings.preset === 'custom' ? '' : 'hidden'}>
+        <div class="field__head">
+          <span class="field__label">Material inédito</span>
+          <output class="field__value" id="out-novelty">${Math.round((settings.noveltyRate ?? 0.45) * 100)}%</output>
+        </div>
+        <input class="stepper__range" type="range" id="th-novelty" min="20" max="85" step="5"
+               value="${Math.round((settings.noveltyRate ?? 0.45) * 100)}" aria-label="Material inédito" />
+
+        <div class="field__head">
+          <span class="field__label">Profundidade das perguntas</span>
+          <output class="field__value" id="out-querybias">${settings.queryBias > 0 ? '+' : ''}${settings.queryBias || 0}</output>
+        </div>
+        <input class="stepper__range" type="range" id="th-querybias" min="-1" max="1" step="1"
+               value="${settings.queryBias || 0}" aria-label="Profundidade das perguntas" />
+      </div>
+
+      <div class="field">
+        <div class="field__head">
+          <span class="field__label">Travar a faixa</span>
+          <output class="field__value" id="out-lock">${settings.lockedTier === null ? 'automática' : `faixa ${settings.lockedTier}`}</output>
+        </div>
+        <input class="stepper__range" type="range" id="th-lock-tier" min="-1" max="${MAX_TIER}" step="1"
+               value="${settings.lockedTier === null ? -1 : settings.lockedTier}" aria-label="Travar a faixa" />
+        <p class="field__hint">À esquerda de tudo, o app escolhe a faixa sozinho.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card__title">Transfer Benchmark</h2>
+      <p class="th-hint">Protocolo fixo em modelos reservados — material que nunca aparece no treino.
+        Serve para comparar dias com a mesma régua.</p>
+      ${last ? `<div class="th-records">
+        <div class="th-record-row"><span>Último resultado</span><span>${pct(last.accuracy)} · ${fmtDateTime(last.completedAt)}</span></div>
+        ${last.blocks.map((b) => `<div class="th-record-row"><span>${esc(b.label)}</span><span>${pct(b.accuracy)}</span></div>`).join('')}
+      </div>` : ''}
+      ${benchmarks.length > 1 ? `<div class="chart chart--bars">${barChart(benchmarks.map((b) => ({ value: Math.round(b.accuracy * 100), max: 100 })))}</div>
+        <p class="chart__caption">Acerto por execução do protocolo v${last.protocolVersion}.</p>` : ''}
+      <button class="btn btn--primary" data-transfer-train="transfer-benchmark">Rodar benchmark</button>
+    </div>
+
+    <div class="card">
+      <h2 class="card__title">Modelos reservados desta faixa</h2>
+      <div class="th-records">${reserved.map((t) => `<div class="th-record-row">
+        <span>${esc(t.label)}</span><span>${esc(t.familyId)}</span>
+      </div>`).join('') || '<p class="th-hint">Nenhum nesta faixa.</p>'}</div>
+      <p class="chart__caption">Eles nunca aparecem em treino. Só assim dá para medir se a habilidade
+        transferiu, em vez de medir prática no mesmo material.</p>
+    </div>`;
+
+  bindTransferEvents();
+}
+
+function bindTransferEvents() {
+  $$('[data-transfer-train]').forEach((btn) => {
+    btn.addEventListener('click', () => openQuickTrain(btn.dataset.transferTrain));
+  });
+
+  $$('[data-transfer-preset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.transferPreset;
+      const preset = TRANSFER_PRESETS[id];
+      store.updateTransferSettings({
+        preset: id,
+        noveltyRate: preset.noveltyRate,
+        tierBias: preset.tierBias,
+        queryBias: preset.queryBias,
+      });
+      render();
+    });
+  });
+
+  const novelty = $('#th-novelty');
+  novelty?.addEventListener('input', () => {
+    $('#out-novelty').textContent = `${novelty.value}%`;
+  });
+  novelty?.addEventListener('change', () => {
+    store.updateTransferSettings({ noveltyRate: Number(novelty.value) / 100 });
+  });
+
+  const queryBias = $('#th-querybias');
+  queryBias?.addEventListener('input', () => {
+    const v = Number(queryBias.value);
+    $('#out-querybias').textContent = `${v > 0 ? '+' : ''}${v}`;
+  });
+  queryBias?.addEventListener('change', () => {
+    store.updateTransferSettings({ queryBias: Number(queryBias.value) });
+  });
+
+  const lock = $('#th-lock-tier');
+  lock?.addEventListener('input', () => {
+    const v = Number(lock.value);
+    $('#out-lock').textContent = v < 0 ? 'automática' : `faixa ${v}`;
+  });
+  lock?.addEventListener('change', () => {
+    const v = Number(lock.value);
+    store.updateTransferSettings({ lockedTier: v < 0 ? null : v });
+  });
 }
 
 /* -------------------------------- progresso ------------------------------ */
@@ -703,8 +898,9 @@ export function showOnboarding(force = false, onDone = null) {
     el.hidden = true;
     el.onclick = null;
     store.updateSettings({ onboarded: true });
-    // Quem chegou aqui tentando treinar continua de onde parou.
-    if (action === 'next') onDone?.();
+    // Quem chegou aqui tentando treinar continua de onde parou — inclusive
+    // quem pulou a apresentação: pular é pular o texto, não o treino.
+    onDone?.();
   };
   return true;
 }
@@ -760,6 +956,30 @@ async function startRoutine(routine) {
   render();
 }
 
+/** Resumo de transferência, quando a sessão passou por um módulo do Mundo real. */
+function transferResultMarkup(session) {
+  const blocks = session.modules.filter((m) => m.transfer);
+  if (!blocks.length) return '';
+  const last = blocks[blocks.length - 1].transfer;
+  const moved = last.tierAfter !== undefined && last.tierAfter !== last.tierBefore;
+  const parts = [];
+  if (last.blockTrials !== undefined) {
+    parts.push(`${last.novelTrials} de ${last.blockTrials} exposições em material novo`);
+  }
+  if (last.families?.length) parts.push(`${last.families.length} formato(s)`);
+  if (last.transferGap !== null && last.transferGap !== undefined) {
+    parts.push(`lacuna ${gapLabel(last.transferGap)}`);
+  }
+
+  return `<div class="th-result__transfer">
+      <p class="th-kicker">Mundo real</p>
+      ${last.realWorldIndex !== undefined ? `<p class="th-big-line">Índice ${last.realWorldIndex}</p>` : ''}
+      ${parts.length ? `<p class="th-hint">${esc(parts.join(' · '))}</p>` : ''}
+      ${moved ? `<p class="th-record">Faixa ${last.tierBefore} → ${last.tierAfter}: ${esc(TRANSFER_TIERS[last.tierAfter].name)}</p>` : ''}
+      ${last.pressureReason ? `<p class="th-hint">${esc(last.pressureReason)}</p>` : ''}
+    </div>`;
+}
+
 function showSessionResult(session) {
   const previous = store.getSessions().filter((s) => s.id !== session.id).slice(-5);
   const previousThroughput = previous.length
@@ -787,6 +1007,7 @@ function showSessionResult(session) {
             <span>${m.trials} tentativas · ${pct(m.accuracy)} · ${formatMs(m.bestExposureMs)}</span>
           </div>`).join('')}
       </div>
+      ${transferResultMarkup(session)}
       <button class="btn btn--primary btn--lg" data-result="close">Concluir</button>
     </div>`;
   result.onclick = (e) => {

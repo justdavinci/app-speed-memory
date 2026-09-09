@@ -8,6 +8,8 @@ import iconicReadout from './iconicReadout.js';
 import peripheralFixation from './peripheralFixation.js';
 import abstractFlash from './abstractFlash.js';
 import visualThreshold from './visualThreshold.js';
+import realWorld, { chaosMode } from './realWorld.js';
+import transferBenchmark from './transferBenchmark.js';
 import benchmark from './benchmark.js';
 
 export const MODULES = {
@@ -18,6 +20,9 @@ export const MODULES = {
   'peripheral-fixation': peripheralFixation,
   'abstract-flash': abstractFlash,
   'visual-threshold': visualThreshold,
+  'real-world': realWorld,
+  'chaos-mode': chaosMode,
+  'transfer-benchmark': transferBenchmark,
   benchmark,
 };
 
@@ -26,3 +31,4 @@ export function getModule(id) {
 }
 
 export { BENCHMARK_PROTOCOL, BENCHMARK_TRIALS } from './benchmark.js';
+export { TRANSFER_BENCHMARK_PROTOCOL, TRANSFER_BENCHMARK_TRIALS } from './transferBenchmark.js';
