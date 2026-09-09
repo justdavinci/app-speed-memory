@@ -1,12 +1,13 @@
 // Estimativa do limiar de disponibilidade.
 //
 // A partir de tentativas espalhadas por vários atrasos, ajusta uma curva
-// acerto × atraso e lê dela o T80: o menor intervalo pós-estímulo em que o
-// desempenho chega a 80% do teto recente da pessoa naquela configuração.
+// acerto × atraso e lê dela o T80. O eixo temporal usa o atraso REAL entregue
+// pela tela quando ele foi medido; o atraso pedido é apenas fallback.
 //
-// Nada disso vem de uma tentativa só. Com poucos dados o app diz "calibrando"
-// em vez de inventar um número — mostrar T80 depois de três tentativas seria
-// precisão falsa.
+// A curva também aceita um piso de acerto ao acaso (gamma). Quando não há
+// informação sobre chance, gamma=0 preserva a compatibilidade com o protocolo
+// anterior. Isso permite que benchmarks de escolha forçada sejam corrigidos
+// sem fingir que desempenho sem memória tende necessariamente a zero.
 
 import { AVAILABILITY_CATEGORIES, AVAILABILITY_CONFIG, CATEGORY_IDS } from './config.js';
 
@@ -14,12 +15,13 @@ const cfg = AVAILABILITY_CONFIG;
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
 
-/** Agrupa as tentativas por atraso pedido, que é o eixo x da curva. */
+/** Agrupa as tentativas pelo atraso realmente entregue (ou pedido, se faltar). */
 export function binByDelay(trials) {
   const bins = new Map();
   for (const t of trials) {
     if (t.invalid || t.warmup) continue;
-    const d = Math.round(t.delayMs);
+    const observed = t.actualDelayMs ?? t.delayMs;
+    const d = Math.round(observed);
     if (!Number.isFinite(d)) continue;
     if (!bins.has(d)) bins.set(d, { delayMs: d, trials: 0, sum: 0 });
     const b = bins.get(d);
@@ -31,11 +33,7 @@ export function binByDelay(trials) {
     .sort((a, b) => a.delayMs - b.delayMs);
 }
 
-/**
- * Teto de desempenho: média dos atrasos mais longos. É contra ele que o T80
- * é lido quando `relativeToAsymptote` está ligado — 80% do que a pessoa
- * consegue com tempo de sobra, não 80% absolutos.
- */
+/** Teto de desempenho: média ponderada dos atrasos mais longos. */
 export function asymptote(bins) {
   if (!bins.length) return null;
   const corte = Math.max(1, Math.ceil(bins.length / 3));
@@ -47,19 +45,19 @@ export function asymptote(bins) {
 }
 
 /**
- * Ajusta `p(d) = A / (1 + exp(-(d - m) / k))` por busca em grade, do grosso ao
- * fino. Sem biblioteca e sem derivada: são poucos pontos, e uma varredura
- * determinística é mais previsível de depurar que um otimizador.
+ * Ajusta `p(d) = gamma + (A-gamma)/(1 + exp(-(d-m)/k))` por busca em grade.
+ * `gamma` é o piso de acerto ao acaso. Com gamma=0 a fórmula é idêntica à v1.
  */
-export function fitCurve(bins, A) {
+export function fitCurve(bins, A, options = {}) {
   if (bins.length < cfg.minDelaysForCurve || !A) return null;
+  const gamma = clamp(options.chanceFloor ?? options.gamma ?? 0, 0, Math.max(0, A - 0.01));
   const delays = bins.map((b) => b.delayMs);
   const menor = Math.min(...delays);
   const maior = Math.max(...delays);
   const faixa = Math.max(20, maior - menor);
 
   const erro = (m, k) => bins.reduce((soma, b) => {
-    const p = A / (1 + Math.exp(-(b.delayMs - m) / k));
+    const p = gamma + (A - gamma) / (1 + Math.exp(-(b.delayMs - m) / k));
     return soma + b.trials * (b.accuracy - p) ** 2;
   }, 0);
 
@@ -86,22 +84,30 @@ export function fitCurve(bins, A) {
   }
 
   const peso = bins.reduce((a, b) => a + b.trials, 0);
-  return { m: melhor.m, k: melhor.k, A, rmse: Math.sqrt(melhor.erro / Math.max(1, peso)) };
+  return {
+    m: melhor.m,
+    k: melhor.k,
+    A,
+    gamma,
+    rmse: Math.sqrt(melhor.erro / Math.max(1, peso)),
+  };
 }
 
 /**
- * Lê da curva o atraso em que o acerto chega a `level`.
+ * Lê da curva o atraso em que o desempenho alcança o nível pedido.
  *
- * Com `relativeToAsymptote`, o alvo é uma fração do teto — e aí a conta não
- * depende do teto: 80% de A resolve para `m + k·ln(4)`, seja qual for A.
- * A decisão entre relativo e absoluto mora em config.js de propósito (§9).
+ * Em modo relativo, `level=0.8` significa 80% do intervalo útil entre chance
+ * (gamma) e o teto A, não simplesmente 80% de A. Com gamma=0 o resultado
+ * continua sendo `m + k·ln(4)` para T80.
  */
 export function thresholdFrom(fit, level = cfg.thresholdLevel, options = {}) {
   if (!fit) return null;
   const relativo = options.relativeToAsymptote ?? cfg.relativeToAsymptote;
-  const alvo = relativo ? level * fit.A : level;
-  if (alvo <= 0 || alvo >= fit.A) return null;
-  const valor = fit.m + fit.k * Math.log(alvo / (fit.A - alvo));
+  const gamma = fit.gamma ?? 0;
+  const alvo = relativo ? gamma + level * (fit.A - gamma) : level;
+  if (alvo <= gamma || alvo >= fit.A) return null;
+  const normalized = (alvo - gamma) / (fit.A - gamma);
+  const valor = fit.m + fit.k * Math.log(normalized / (1 - normalized));
   return Number.isFinite(valor) ? valor : null;
 }
 
@@ -120,18 +126,12 @@ export function confidenceFor({ trials, delays, rmse }) {
   return 'baixa';
 }
 
-/**
- * Estimativa completa de uma categoria.
- *
- * @param {Array} trials tentativas de disponibilidade { delayMs, accuracy, invalid, warmup }
- * @param {object} [state] escada, usada como plano B quando faltam dados para a curva
- * @returns {{t80:number|null, curve:object|null, ...}}
- */
+/** Estimativa completa de uma categoria/condição. */
 export function estimateThreshold(trials, state = null, options = {}) {
   const validas = trials.filter((t) => !t.invalid && !t.warmup);
   const bins = binByDelay(validas);
   const A = asymptote(bins);
-  const fit = fitCurve(bins, A);
+  const fit = fitCurve(bins, A, options);
   const nivel = options.level ?? cfg.thresholdLevel;
 
   let t80 = validas.length >= cfg.minTrialsForEstimate ? thresholdFrom(fit, nivel, options) : null;
@@ -148,6 +148,7 @@ export function estimateThreshold(trials, state = null, options = {}) {
     t80: clamped === null ? null : Math.round(clamped),
     source: origem,
     asymptote: A,
+    chanceFloor: fit?.gamma ?? (options.chanceFloor ?? 0),
     curve: fit,
     bins,
     trials: validas.length,
@@ -155,7 +156,6 @@ export function estimateThreshold(trials, state = null, options = {}) {
     accuracy: validas.length ? mean(validas.map((t) => t.accuracy ?? 0)) : null,
     exposureMs: validas.length ? mean(validas.map((t) => t.exposureMs || 0)) : null,
     confidence: confidenceFor({ trials: validas.length, delays: bins.length, rmse: fit?.rmse }),
-    // Fora da interface padrão, mas úteis em métricas avançadas.
     levels: fit ? {
       t50: round(thresholdFrom(fit, 0.5, options)),
       t75: round(thresholdFrom(fit, 0.75, options)),
@@ -176,11 +176,7 @@ export function smooth(previous, current, alpha = cfg.smoothingAlpha) {
   return Math.round(previous + alpha * (current - previous));
 }
 
-/**
- * Índice agregado 0–1000. Não é média de milissegundos: cada categoria é
- * normalizada nas próprias âncoras antes de entrar na conta, senão categorias
- * naturalmente lentas puxariam tudo para baixo (§32).
- */
+/** Índice agregado 0–1000, normalizado por categoria. */
 export function availabilityScore(porCategoria) {
   const partes = [];
   for (const id of CATEGORY_IDS) {
