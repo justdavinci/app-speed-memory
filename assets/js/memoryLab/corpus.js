@@ -5,7 +5,7 @@
 // Esta v1 usa localStorage; packs grandes devem ser migrados para IndexedDB em
 // uma etapa futura.
 
-import { LITERATURE_SEED, validateDataset } from './dataset.js';
+import { LITERATURE_SEED } from './dataset.js';
 
 const KEY = 'speedmemory.memory-lab.private-corpus.v1';
 const memory = new Map();
@@ -85,22 +85,22 @@ export function importCorpusPack(input) {
   const packId = String(pack.id || `private-${Date.now().toString(36)}`).replace(/[^a-zA-Z0-9._-]/g, '-');
   const stimuli = pack.stimuli.map((s, i) => normalizeStimulus(s, packId, i));
 
-  // Packs importados podem ser "page-only" e não ter fatos semânticos. A
-  // validação rígida do seed é usada apenas quando a unidade declara facts.
-  const basicErrors = [];
-  const ids = new Set();
+  // Um pack de páginas pode não ter gabarito semântico/fatos, mas precisa ter
+  // topologia suficiente para One Shot/Page Capture. Modos Binding/Separation
+  // filtram automaticamente unidades sem fatos relacionais.
+  const errors = [];
+  const ids = new Set(LITERATURE_SEED.map((s) => s.id));
   for (const s of stimuli) {
-    if (ids.has(s.id)) basicErrors.push(`id duplicado: ${s.id}`);
+    if (ids.has(s.id)) errors.push(`id duplicado ou já usado: ${s.id}`);
     ids.add(s.id);
-    if (s.blocks.length < 2) basicErrors.push(`${s.id}: precisa de pelo menos 2 blocos`);
-    if (s.anchors.length < 2) basicErrors.push(`${s.id}: precisa de pelo menos 2 âncoras`);
-    if (s.anchors.some((a) => a.block < 0 || a.block >= s.blocks.length)) basicErrors.push(`${s.id}: âncora fora dos blocos`);
-    if (s.facts.length && validateDataset([{ ...s, facts: s.facts.length >= 3 ? s.facts : [...s.facts, ...s.facts, ...s.facts].slice(0, 3), anchors: s.anchors.length >= 3 ? s.anchors : [...s.anchors, s.anchors[0]] }]).length) {
-      // A validação detalhada do seed continua sendo coberta na suíte; aqui a
-      // mensagem útil ao usuário é mantida simples.
+    if (s.blocks.length < 2) errors.push(`${s.id}: precisa de pelo menos 2 blocos`);
+    if (s.anchors.length < 2) errors.push(`${s.id}: precisa de pelo menos 2 âncoras`);
+    if (s.anchors.some((a) => a.block < 0 || a.block >= s.blocks.length)) errors.push(`${s.id}: âncora fora dos blocos`);
+    for (const f of s.facts) {
+      if ((f.distractors || []).length < 2) errors.push(`${s.id}: fato “${f.prompt}” precisa de 2+ distratores`);
     }
   }
-  if (basicErrors.length) throw new Error(basicErrors.slice(0, 6).join('; '));
+  if (errors.length) throw new Error(errors.slice(0, 8).join('; '));
 
   const normalized = {
     version: 1,
