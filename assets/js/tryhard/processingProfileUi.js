@@ -1,6 +1,10 @@
 // UI do Perfil de Processamento. A escala 0–100 é interna ao app: não é QI,
 // percentil populacional nem diagnóstico clínico.
+//
+// O bootstrap do Memory Lab é carregado como módulo independente e instala sua
+// aba após a navegação principal terminar de inicializar.
 
+import '../memoryLab/bootstrap.js';
 import { esc } from '../util.js';
 import { processingProfile } from './processingProfile.js';
 
