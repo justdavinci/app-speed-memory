@@ -1,6 +1,6 @@
 // Service worker: cache do "app shell" para funcionar offline.
 // A versão no nome do cache invalida tudo quando os arquivos mudam.
-const CACHE = 'piscamemory-v5';
+const CACHE = 'piscamemory-v6';
 
 const SHELL = [
   './',
@@ -8,6 +8,7 @@ const SHELL = [
   './manifest.webmanifest',
   './assets/css/styles.css',
   './assets/css/tryhard-enhancements.css',
+  './assets/css/memory-lab.css',
   './assets/js/app.js',
   './assets/js/util.js',
   './assets/js/storage.js',
@@ -68,6 +69,15 @@ const SHELL = [
   './assets/js/tryhard/transfer/families/mapDiagram.js',
   './assets/js/tryhard/transfer/families/sceneLayout.js',
   './assets/js/tryhard/transfer/families/composite.js',
+  './assets/js/memoryLab/config.js',
+  './assets/js/memoryLab/dataset.js',
+  './assets/js/memoryLab/corpus.js',
+  './assets/js/memoryLab/store.js',
+  './assets/js/memoryLab/questions.js',
+  './assets/js/memoryLab/metrics.js',
+  './assets/js/memoryLab/engine.js',
+  './assets/js/memoryLab/uiV2.js',
+  './assets/js/memoryLab/bootstrap.js',
   './assets/js/generators/digits.js',
   './assets/js/generators/words.js',
   './assets/js/generators/sentences.js',
