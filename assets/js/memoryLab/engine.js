@@ -1,7 +1,7 @@
 // MEMORY LAB — construção das tentativas e adaptação.
 
 import { MEMORY_LAB_CONFIG, MEMORY_LAB_MODES } from './config.js';
-import { LITERATURE_SEED, stimulusById } from './dataset.js';
+import { allCorpusStimuli } from './corpus.js';
 import { pickQuestions, questionBankFor, separationQuestion } from './questions.js';
 import * as store from './store.js';
 import { makeRng, rPick, rShuffle } from '../tryhard/rng.js';
@@ -18,37 +18,60 @@ function splitForMode(mode) {
   return mode === 'life-transfer' ? 'holdout' : 'train';
 }
 
+function compatible(stimulus, mode) {
+  if (!stimulus?.blocks?.length || (stimulus.anchors || []).length < 1) return false;
+  if (mode === 'binding' || mode === 'separation') return (stimulus.facts || []).length >= 3;
+  const bank = questionBankFor(stimulus, () => 0.37);
+  return bank.length >= Math.min(3, MEMORY_LAB_MODES[mode]?.queryCount || 1);
+}
+
+function corpus() {
+  return allCorpusStimuli();
+}
+
+function stimulusById(id) {
+  return corpus().find((s) => s.id === id) || null;
+}
+
 export function candidateStimuli(mode, { includeSeen = false } = {}) {
   const split = splitForMode(mode);
-  let xs = LITERATURE_SEED.filter((s) => s.split === split);
+  let xs = corpus().filter((s) => s.split === split && compatible(s, mode));
   if (!includeSeen || requireFresh(mode)) xs = xs.filter((s) => !store.isSeen(s.id));
   return xs;
 }
 
 export function freshCounts() {
-  const count = (split) => LITERATURE_SEED.filter((s) => s.split === split && !store.isSeen(s.id)).length;
+  const all = corpus();
+  const count = (split) => all.filter((s) => s.split === split && !store.isSeen(s.id)).length;
   return { train: count('train'), novel: count('novel'), holdout: count('holdout') };
 }
 
 function chooseTarget(mode, rng) {
-  let candidates = candidateStimuli(mode, { includeSeen: !requireFresh(mode) });
-  // Component drills podem reaproveitar conteúdo depois de o pool fresco acabar;
-  // o registro deixa claro que isso não conta como One Shot válido.
-  if (!candidates.length && !requireFresh(mode)) {
-    candidates = LITERATURE_SEED.filter((s) => s.split === 'train');
+  const all = corpus().filter((s) => s.split === splitForMode(mode) && compatible(s, mode));
+
+  if (requireFresh(mode)) {
+    const fresh = all.filter((s) => !store.isSeen(s.id));
+    return fresh.length ? rPick(rng, fresh) : null;
   }
-  return candidates.length ? rPick(rng, candidates) : null;
+
+  // Drills de componente EXISTEM para pressionar uma transição específica do
+  // pipeline. Eles devem preferir material já visto, preservando unidades
+  // virgens para One Shot/Page Capture. Só consomem material fresco quando não
+  // existe nenhuma unidade compatível previamente vista.
+  const seen = all.filter((s) => store.isSeen(s.id));
+  if (seen.length) return rPick(rng, seen);
+  return all.length ? rPick(rng, all) : null;
 }
 
 function chooseInterference(target, rng) {
-  const seen = LITERATURE_SEED.filter((s) => s.split === 'train' && s.id !== target.id && store.isSeen(s.id));
+  const all = corpus().filter((s) => s.split === 'train' && s.id !== target.id && compatible(s, 'one-shot'));
+  const seen = all.filter((s) => store.isSeen(s.id));
   if (seen.length) return rPick(rng, seen);
-  const any = LITERATURE_SEED.filter((s) => s.split === 'train' && s.id !== target.id);
-  return any.length ? rPick(rng, any) : null;
+  return all.length ? rPick(rng, all) : null;
 }
 
 function alteredFactSheet(stimulus, factIndex) {
-  const rows = stimulus.facts.slice(0, 3).map((f, i) => ({ prompt: f.prompt, answer: f.answer }));
+  const rows = stimulus.facts.slice(0, 3).map((f) => ({ prompt: f.prompt, answer: f.answer }));
   const f = stimulus.facts[factIndex % rows.length];
   rows[factIndex % rows.length] = { prompt: f.prompt, answer: f.distractors?.[0] || 'outro valor' };
   return rows;
@@ -65,8 +88,8 @@ export function createMemoryTrial({ mode = 'one-shot', settings = store.getSetti
       mode,
       split: splitForMode(mode),
       reason: mode === 'life-transfer'
-        ? 'O holdout interno deste pack já foi consumido. Não o reutilizamos para fingir novidade.'
-        : 'O pool fresco deste modo acabou. Adicione novo material real para preservar o protocolo One Shot.',
+        ? 'O holdout deste corpus já foi consumido. Não o reutilizamos para fingir novidade.'
+        : 'O pool fresco deste modo acabou. Importe novo material real para preservar o protocolo One Shot.',
     };
   }
 
@@ -91,8 +114,9 @@ export function createMemoryTrial({ mode = 'one-shot', settings = store.getSetti
     renderKind = 'fact-sheet';
     const factIndex = Math.floor(rng() * Math.min(3, target.facts.length));
     secondary = { kind: 'fact-sheet', rows: alteredFactSheet(target, factIndex), label: 'Ficha B' };
+    const sep = separationQuestion(target, factIndex, rng);
     questions = [
-      separationQuestion(target, factIndex, rng),
+      ...(sep ? [sep] : []),
       ...pickQuestions(bank, Math.max(0, spec.queryCount - 1), rng, ['binding']),
     ];
   } else if (mode === 'interference') {
@@ -102,6 +126,10 @@ export function createMemoryTrial({ mode = 'one-shot', settings = store.getSetti
     questions = pickQuestions(bank, spec.queryCount, rng, ['semantic', 'binding', 'spatial', 'anchor']);
   } else {
     questions = pickQuestions(bank, spec.queryCount, rng, ['anchor', 'binding', 'semantic']);
+  }
+
+  if (!questions.length) {
+    return { exhausted: true, mode, split: target.split, reason: 'Esta unidade não tem perguntas suficientes para este modo.' };
   }
 
   const chosenIds = new Set(questions.map((q) => q.id));
