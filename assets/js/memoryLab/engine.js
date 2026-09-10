@@ -48,19 +48,20 @@ export function freshCounts() {
 
 function chooseTarget(mode, rng) {
   const all = corpus().filter((s) => s.split === splitForMode(mode) && compatible(s, mode));
+  const fresh = all.filter((s) => !store.isSeen(s.id));
 
-  if (requireFresh(mode)) {
-    const fresh = all.filter((s) => !store.isSeen(s.id));
-    return fresh.length ? rPick(rng, fresh) : null;
-  }
+  if (requireFresh(mode)) return fresh.length ? rPick(rng, fresh) : null;
 
-  // Drills de componente EXISTEM para pressionar uma transição específica do
-  // pipeline. Eles devem preferir material já visto, preservando unidades
-  // virgens para One Shot/Page Capture. Só consomem material fresco quando não
-  // existe nenhuma unidade compatível previamente vista.
+  // A primeira execução de cada drill específico ganha UMA unidade fresca
+  // para produzir um ponto de mensuração não contaminado por familiaridade.
+  // Depois disso, o drill prefere material já visto e deixa o restante do
+  // estoque virgem para One Shot/Page Capture.
+  const alreadyMeasured = store.getTrials({ mode }).some((t) => t.measurementEligible && !t.invalid);
+  if (!alreadyMeasured && fresh.length) return rPick(rng, fresh);
+
   const seen = all.filter((s) => store.isSeen(s.id));
   if (seen.length) return rPick(rng, seen);
-  return all.length ? rPick(rng, all) : null;
+  return fresh.length ? rPick(rng, fresh) : null;
 }
 
 function chooseInterference(target, rng) {
@@ -277,6 +278,10 @@ export function buildRecord({ trial, result, timing, retentionTiming, interferen
     source: trial.target.source,
     chapter: trial.target.chapter,
     oneShotValid: !!trial.oneShotValid,
+    // Só primeira exposição ou benchmark pode sustentar os 7 pontos de perfil.
+    // Repetições continuam úteis para treino/adaptação, mas não para afirmar
+    // que a capacidade geral subiu.
+    measurementEligible: !!trial.oneShotValid || !!trial.benchmark,
     benchmark: !!trial.benchmark,
     requestedExposureMs: trial.exposureMs,
     actualExposureMs: timing?.actualMs ?? null,
