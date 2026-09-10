@@ -47,6 +47,10 @@ function emptyData() {
     datasetVersion: MEMORY_LAB_CONFIG.datasetVersion,
     settings: { ...DEFAULT_MEMORY_LAB_SETTINGS },
     skills: {},
+    // `seen` é deliberadamente monotônico: nunca apagamos uma exposição para
+    // economizar espaço, porque isso permitiria ao item voltar a ser chamado
+    // de "virgem". Ao escalar para corpora enormes, migraremos esta estrutura
+    // para IndexedDB em vez de podá-la.
     seen: {},
     trials: [],
     sessions: [],
@@ -150,11 +154,6 @@ export function markSeen(stimulusId, info = {}) {
       exposures: (data.seen[stimulusId].exposures || 1) + 1,
       lastRepeatAt: new Date().toISOString(),
     };
-  }
-  const ids = Object.keys(data.seen);
-  if (ids.length > MEMORY_LAB_CONFIG.maxSeenStimuli) {
-    ids.sort((a, b) => String(data.seen[a].firstSeenAt).localeCompare(String(data.seen[b].firstSeenAt)));
-    for (const id of ids.slice(0, ids.length - MEMORY_LAB_CONFIG.maxSeenStimuli)) delete data.seen[id];
   }
   save();
   return { ...data.seen[stimulusId] };
