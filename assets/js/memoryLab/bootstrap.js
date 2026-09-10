@@ -4,7 +4,7 @@
 // views. Este bootstrap instala o Lab depois da inicialização do app, evitando
 // acoplar o runner experimental ao runner clássico/Try Hard.
 
-import { initMemoryLab, onEnterMemoryLab } from './ui.js';
+import { initMemoryLab, onEnterMemoryLab } from './uiV2.js';
 
 let installed = false;
 
@@ -50,8 +50,6 @@ function install() {
   }
   tabbar.classList.add('tabbar--with-lab');
 
-  // O botão é criado depois de bindEvents() do app principal; portanto somente
-  // este handler controla a view Memory Lab.
   button.addEventListener('click', () => {
     document.querySelectorAll('.view').forEach((v) => { v.hidden = v !== section; });
     tabbar.querySelectorAll('.tab').forEach((tab) => {
@@ -67,8 +65,6 @@ function install() {
     onEnterMemoryLab();
   });
 
-  // Ao voltar para qualquer aba antiga, a view experimental precisa sumir — o
-  // showView legado não conhece a aba criada dinamicamente.
   tabbar.querySelectorAll('.tab:not([data-view="memorylab"])').forEach((tab) => {
     tab.addEventListener('click', () => { section.hidden = true; });
   });
@@ -85,8 +81,6 @@ function install() {
   });
 }
 
-// O import acontece durante o carregamento do app. O timer garante que a aba
-// seja criada depois que a navegação legada já ligou seus listeners.
 setTimeout(install, 0);
 
 export { install as installMemoryLabTab };
