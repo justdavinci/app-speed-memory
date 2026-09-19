@@ -254,7 +254,7 @@ export const WORD_BANK = [
  * A deduplicação abaixo permite reaproveitar termos do léxico de frases sem
  * aumentar artificialmente o banco com entradas repetidas.
  */
-const EXPANDED_WORD_BANK = \`
+const EXPANDED_WORD_BANK = `
 abacate abacaxi abajur abóbora abridor acampamento acordeão aquário agenda água-forte alicate almofada altar ampulheta antena anzol aquarela arco armário asa avental
 azulejo babador bagagem baía balanço bambu banheira banquinho barraca barril bastão bateria baú bebedouro bengala berço berimbau beterraba bigorna binóculo
 biscoito boia boné boneca borracha botão brinquedo bússola cabide cabo cacto cadeira caixote calendário câmera caminhão campainha campo canhão canivete
@@ -288,7 +288,7 @@ bacia bandeja bule canudo colher concha escorredor espremedor frigideira garfo j
 apontador arquivo calendário cartucho cola caderno envelope estojo fichário marcador pasta prancheta teclado
 acordeão bateria clarinete contrabaixo corneta flautim gaita oboé pandeiro piano saxofone trompete ukulele violino xilofone
 bola boliche dama dardo fantoche ioiô peteca quebra-cabeça xadrez
-\`.trim().split(/\s+/);
+`.trim().split(/\s+/);
 
 const EXTRA_SUBJECTS = [
   { w: 'médico', g: 'm', k: 'h' }, { w: 'músico', g: 'm', k: 'h' },
