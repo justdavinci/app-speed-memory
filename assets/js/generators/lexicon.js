@@ -398,7 +398,7 @@ const EXTRA_PHRASES = {
       'no corredor','na montanha','na piscina','no escritório','na cabana','na torre','ao amanhecer'],
   3: ['perto da ponte','diante do portão','através da janela',
       'antes da viagem','depois do almoço','durante a manhã','longe do mercado'],
-  4: ['à beira do lago','no alto da colina','do outro lado da rua',
+  4: ['à beira do lago','no alto da colina','sob a velha ponte',
       'perto da porta azul','no centro da praça','ao redor da fogueira'],
 };
 for (const [len, phrases] of Object.entries(EXTRA_PHRASES)) {
