@@ -395,8 +395,8 @@ ADVERBS.push(
 
 const EXTRA_PHRASES = {
   2: ['no parque','na praça','no teatro','na oficina','no campo','na fazenda',
-      'no corredor','na montanha','na piscina','no escritório','na cabana','na torre'],
-  3: ['ao amanhecer','perto da ponte','diante do portão','através da janela',
+      'no corredor','na montanha','na piscina','no escritório','na cabana','na torre','ao amanhecer'],
+  3: ['perto da ponte','diante do portão','através da janela',
       'antes da viagem','depois do almoço','durante a manhã','longe do mercado'],
   4: ['à beira do lago','no alto da colina','do outro lado da rua',
       'perto da porta azul','no centro da praça','ao redor da fogueira'],
